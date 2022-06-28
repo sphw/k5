@@ -144,6 +144,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "codegen"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "color-eyre"
 version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -269,11 +277,14 @@ version = "0.1.0"
 dependencies = [
  "cargo_metadata",
  "clap",
+ "codegen",
  "color-eyre",
  "colored",
  "config",
  "goblin",
  "serde",
+ "serde_json",
+ "srec",
 ]
 
 [[package]]
@@ -497,6 +508,12 @@ checksum = "900fba806f70c630b0a382d0d825e17a0f19fcd059a2ade1ff237bcddf446b31"
 dependencies = [
  "lazy_static",
 ]
+
+[[package]]
+name = "srec"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17c3a0538ec242e3cd333cdcdc8b720faa2fa0a9d7f444cf1ff63e7d3303adfb"
 
 [[package]]
 name = "static_assertions"
