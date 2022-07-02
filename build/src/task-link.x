@@ -4,7 +4,7 @@ ENTRY(_start);
 
 SECTIONS
 {
-  PROVIDE(_stack_start = ORIGIN(STACK) + LENGTH(STACK));
+  PROVIDE(_stack_start = ORIGIN(STACK_SPACE) + LENGTH(STACK_SPACE));
 
   /* ### .text */
   .text : {

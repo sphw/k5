@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
+use std::ops::Range;
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -12,13 +13,35 @@ pub struct TaskList {
 pub struct Task {
     pub name: String,
     pub entrypoint: u32,
+    pub stack_space: Range<u32>,
+    pub init_stack_size: u32,
+    pub flash_region: Range<u32>,
+    pub ram_region: Range<u32>,
 }
 
 impl TaskList {
     fn gen_code(&self) -> String {
-        let mut code = format!("pub static TASKS: &[(&'static str, u32)] = &[");
+        let mut code = format!(
+            "
+        pub static TASKS: &[kernel::TaskDesc] = &["
+        );
         for task in &self.tasks {
-            code += &format!("({:?}, {}),", task.name, task.entrypoint);
+            code += &format!(
+                "kernel::TaskDesc {{
+name: {:?},
+entrypoint: {},
+stack_space: {:?},
+init_stack_size: {},
+flash_region: {:?},
+ram_region: {:?},
+}},",
+                task.name,
+                task.entrypoint,
+                task.stack_space,
+                task.init_stack_size,
+                task.flash_region,
+                task.ram_region
+            );
         }
         code += "];\n";
 

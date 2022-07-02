@@ -1,10 +1,31 @@
+/* # Developer notes
+
+- Symbols that start with a double underscore (__) are considered "private"
+
+- Symbols that start with a single underscore (_) are considered "semi-public"; they can be
+  overridden in a user linker script, but should not be referred from user code (e.g. `extern "C" {
+  static mut __sbss }`).
+
+- `EXTERN` forces the linker to keep a symbol in the final binary. We use this to make sure a
+  symbol if not dropped if it appears in or near the front of the linker arguments and "it's not
+  needed" by any of the preceding objects (linker arguments)
+
+- `PROVIDE` is used to provide default values that can be overridden by a user linker script
+
+- On alignment: it's important for correctness that the VMA boundaries of both .bss and .data *and*
+  the LMA of .data are all 4-byte aligned. These alignments are assumed by the RAM initialization
+  routine. There's also a second benefit: 4-byte aligned boundaries means that you won't see
+  "Address (..) is out of bounds" in the disassembly produced by `objdump`.
+*/
+
 /* Provides information about the memory layout of the device */
 /* This will be provided by the user (see `memory.x`) or by a Board Support Crate */
 INCLUDE memory.x
 
 /* # Entry point = reset vector */
+EXTERN(__RESET_VECTOR);
+EXTERN(Reset);
 ENTRY(Reset);
-EXTERN(__RESET_VECTOR); /* depends on the `Reset` symbol */
 
 /* # Exception vectors */
 /* This is effectively weak aliasing at the linker level */
@@ -45,7 +66,8 @@ SECTIONS
   /* ### Vector table */
   .vector_table ORIGIN(FLASH) :
   {
-    __start_vector = .;
+    __vector_table = .;
+
     /* Initial Stack Pointer (SP) value */
     LONG(_stack_start);
 
@@ -61,29 +83,12 @@ SECTIONS
     KEEP(*(.vector_table.interrupts)); /* this is the `__INTERRUPTS` symbol */
   } > FLASH
 
-  __vector_size = SIZEOF(.vector_table);
-  /* Header containing data needed by the bootloader */
-  .header :
-  {
-	__header_start = .;
-	KEEP(*(.image_header));
-  } > FLASH
-
-  /* Explicitly place text at vector table + size of header, deliberately ignoring
-     section alignment. This is important because the bootloader assumes that the header
-     immediately follows the vector table; if something changes to cause that to not
-     be true, this expression will cause the text and header sections to overlap, causing
-     a difficult to understand linker failure, which will hopefully be somewhat improved
-     by this comment.
-  */
-  PROVIDE(_stext = ADDR(.vector_table) + SIZEOF(.vector_table) + SIZEOF(.header));
+  PROVIDE(_stext = ADDR(.vector_table) + SIZEOF(.vector_table));
 
   /* ### .text */
   .text _stext :
   {
     __stext = .;
-    /* place these 2 close to each other or the `b` instruction will fail to link */
-    *(.PreResetTrampoline);
     *(.Reset);
 
     *(.text .text.*);
@@ -92,13 +97,15 @@ SECTIONS
        so must be placed close to it. */
     *(.HardFaultTrampoline);
     *(.HardFault.*);
-    . = ALIGN(4);
+
+    . = ALIGN(4); /* Pad .text to the alignment to workaround overlapping load section bug in old lld */
     __etext = .;
   } > FLASH
 
   /* ### .rodata */
-  .rodata __etext : ALIGN(4)
+  .rodata : ALIGN(4)
   {
+    . = ALIGN(4);
     __srodata = .;
     *(.rodata .rodata.*);
 
@@ -131,20 +138,18 @@ SECTIONS
      This section contains the TrustZone-M veneers put there by the Arm GNU linker. */
   /* Security Attribution Unit blocks must be 32 bytes aligned. */
   /* Note that this pads the FLASH usage to 32 byte alignment. */
-  .gnu.sgstubs : {
+  .gnu.sgstubs : ALIGN(32)
+  {
     . = ALIGN(32);
     __veneer_base = .;
     *(.gnu.sgstubs*)
     . = ALIGN(32);
-    __veneer_limit = .;
   } > FLASH
-
-  /*
-   * Fill the remaining flash space with a known value
+  /* Place `__veneer_limit` outside the `.gnu.sgstubs` section because veneers are
+   * always inserted last in the section, which would otherwise be _after_ the `__veneer_limit` symbol.
    */
-  .fill : ALIGN(1) {
-    . = (ORIGIN(FLASH) + LENGTH(FLASH));
-  } > FLASH =0xffffffff
+  . = ALIGN(32);
+  __veneer_limit = .;
 
   /* ### .bss */
   .bss (NOLOAD) : ALIGN(4)
@@ -191,8 +196,6 @@ SECTIONS
     *(.ARM.extab.*);
   }
 }
-
-/*INCLUDE device.x*/ /* FIXME(sphw) */
 
 /* Do not exceed this mark in the error messages below                                    | */
 /* # Alignment checks */
@@ -247,28 +250,4 @@ ERROR(cortex-m-rt): .got section detected in the input object files
 Dynamic relocations are not supported. If you are linking to C code compiled using
 the 'cc' crate then modify your build script to compile the C code _without_
 the -fPIC flag. See the documentation of the `cc::Build.pic` method for details.");
-
-  /* So let's talk about vector table alignment:
-   * ARMv8m section B3.30
-   * In a PE with a configurable vector table base, the vector table is naturally-aligned to a power of two, with an
-   * alignment value that is:
-   *  - A minimum of 128 bytes.
-   *  - Greater than or equal to (Number of Exceptions supported x4)
-   * ARMv7m section B1.5.3
-   * The Vector table must be naturally aligned to a power of two whose alignment value is greater than or equal to
-   * (Number of Exceptions supported x 4), with a minimum alignmentof 128 bytes.
-   *
-   * Annoyingly this means that vector table alignment is device specific.
-   * This is also a nice catch-22: we need to know the size of the vector
-   * table to calculate the alignment but we need to know the alignment
-   * before we know the size.
-   *
-   * The best we can do right now is use a specified alignment and
-   * indicate if it is wrong
-   */
-ASSERT(ADDR(.vector_table) % (1 << LOG2CEIL(SIZEOF(.vector_table))) == 0, "
-Vector table alignment too small for number of exception entires. Increase
-the alignment to the next power of two");
-
-
 /* Do not exceed this mark in the error messages above                                    | */
