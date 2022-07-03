@@ -29,7 +29,7 @@ const PRIORITY_COUNT: usize = 8;
 
 pub struct Kernel {
     pub scheduler: Scheduler,
-    tasks: Vec<Task, 32>,
+    tasks: Vec<Task, 2>,
 }
 
 impl Kernel {
@@ -52,10 +52,10 @@ impl Kernel {
         Ok(kernel)
     }
 
-    pub fn new(tasks: Vec<Task, 32>, idle_ref: TaskRef) -> Result<Self, KernelError> {
+    pub fn new(tasks: Vec<Task, 2>, idle_ref: TaskRef) -> Result<Self, KernelError> {
         let current_thread = ThreadTime {
             tcb_ref: ThreadRef(0),
-            time: 0,
+            time: 20,
         };
         let tcbs = Vec::default();
         let domains = MaybeUninit::<[MpscQueue<DomainEntry>; PRIORITY_COUNT]>::uninit();
@@ -75,7 +75,7 @@ impl Kernel {
             tasks,
         };
         let task = kernel.task(idle_ref)?;
-        kernel.spawn_thread(idle_ref, 0, 0, usize::MAX, task.entrypoint)?;
+        kernel.spawn_thread(idle_ref, 0, usize::MAX, 0, task.entrypoint)?;
         Ok(kernel)
     }
 
@@ -165,13 +165,12 @@ impl Kernel {
             .unwrap()
             .unwrap_or(self.scheduler.current_thread.tcb_ref);
         let tcb = self.scheduler.get_tcb(tcb_ref).unwrap();
-        let task = self.task(tcb.task).unwrap();
         arch::start_root_task(&tcb);
     }
 }
 
 pub struct Scheduler {
-    tcbs: Vec<TCB, 64>,
+    tcbs: Vec<TCB, 15>,
     domains: [MpscQueue<DomainEntry>; PRIORITY_COUNT],
     exhausted_threads: List<ExhaustedThread>,
     current_thread: ThreadTime,
@@ -378,7 +377,7 @@ pub struct TCB {
     priority: usize,
     budget: usize,
     cooldown: usize,
-    capabilities: Vec<Capability, 32>,
+    capabilities: Vec<Capability, 2>,
     stack_pointer: usize,
     entrypoint: usize,
 }
@@ -463,12 +462,13 @@ impl TCB {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct Task {
     flash_memory_region: Range<usize>,
     ram_memory_region: Range<usize>,
     stack_size: usize,
     available_stack_ptr: Vec<Range<usize>, 8>,
-    capabilities: Vec<Capability, 32>,
+    capabilities: Vec<Capability, 2>,
     entrypoint: TaskPtr<'static, fn() -> !>,
     secure: bool,
 }
@@ -479,7 +479,7 @@ impl Task {
         ram_memory_region: Range<usize>,
         stack_size: usize,
         available_stack_ptr: Vec<Range<usize>, 8>,
-        capabilities: Vec<Capability, 32>,
+        capabilities: Vec<Capability, 2>,
         entrypoint: TaskPtr<'static, fn() -> !>,
         secure: bool,
     ) -> Self {
@@ -578,6 +578,7 @@ macro_rules! linked_impl {
 linked_impl! {IPCMsg }
 linked_impl! { DomainEntry }
 
+#[derive(Clone)]
 pub enum Capability {
     Endpoint(Endpoint),
     Notification,
@@ -611,13 +612,28 @@ pub struct TaskDesc {
 mod tests {
     use super::*;
 
-    type Kernel = super::Kernel;
+    fn test_kernel() -> Kernel {
+        Kernel::new(
+            heapless::Vec::from_slice(&[Task::new(
+                0..0x400,
+                0..0x400,
+                100,
+                Vec::from_slice(&[0..200]).unwrap(),
+                Vec::default(),
+                unsafe { TaskPtr::from_raw_parts(1, ()) },
+                false,
+            )])
+            .unwrap(),
+            TaskRef(0),
+        )
+        .unwrap()
+    }
 
     #[test]
     fn test_simple_tick_schedule() {
-        let mut kernel = Kernel::new(TCB::new(TaskRef(0), 0, 0, usize::MAX, 0));
-        let a = TCB::new(TaskRef(1), 0, 7, 5, 6);
-        let b = TCB::new(TaskRef(2), 0, 7, 3, 3);
+        let mut kernel = test_kernel();
+        let a = TCB::new(TaskRef(1), 0, 7, 5, 6, 0);
+        let b = TCB::new(TaskRef(2), 0, 7, 3, 3, 0);
         kernel.scheduler.spawn(a).unwrap();
         kernel.scheduler.spawn(b).unwrap();
         for _ in 0..5 {
@@ -666,9 +682,9 @@ mod tests {
 
     #[test]
     fn test_send_schedule() {
-        let mut kernel = Kernel::new(TCB::new(TaskRef(0), 0, 0, usize::MAX, 0));
-        let a = TCB::new(TaskRef(1), 0, 7, 5, 6);
-        let mut b = TCB::new(TaskRef(2), 0, 7, 3, 3);
+        let mut kernel = test_kernel();
+        let a = TCB::new(TaskRef(1), 0, 7, 5, 6, 0);
+        let mut b = TCB::new(TaskRef(2), 0, 7, 3, 3, 0);
         b.capabilities
             .push(Capability::Endpoint(Endpoint {
                 tcb_ref: ThreadRef(1),
@@ -702,9 +718,9 @@ mod tests {
 
     #[test]
     fn test_call_schedule() {
-        let mut kernel = Kernel::new(TCB::new(TaskRef(0), 0, 0, usize::MAX, 0));
-        let a = TCB::new(TaskRef(1), 0, 7, 5, 6);
-        let mut b = TCB::new(TaskRef(2), 0, 7, 3, 3);
+        let mut kernel = test_kernel();
+        let a = TCB::new(TaskRef(1), 0, 7, 5, 6, 0);
+        let mut b = TCB::new(TaskRef(2), 0, 7, 3, 3, 0);
         b.capabilities
             .push(Capability::Endpoint(Endpoint {
                 tcb_ref: ThreadRef(1),
@@ -735,6 +751,7 @@ mod tests {
             10,
             Vec::from_slice(&[0..50]).unwrap(),
             Vec::default(),
+            unsafe { TaskPtr::from_raw_parts(0, ()) },
             false,
         );
         for i in 0..5 {
