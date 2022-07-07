@@ -5,12 +5,15 @@ use core::{
     sync::atomic::{AtomicPtr, Ordering},
 };
 
+use abi::{SyscallArgs, SyscallIndex, SyscallReturn};
+
 use crate::{task_ptr::TaskPtrMut, Kernel, Task, TaskDesc, TCB};
 
 const INITIAL_PSR: u32 = 1 << 24;
 const EXC_RETURN: u32 = 0xFFFFFFFD; //FIXME(sphw): this is only correct on v8m in secure mode
 
 static mut KERNEL: MaybeUninit<Kernel> = MaybeUninit::uninit();
+#[no_mangle]
 static mut CURRENT_TCB: AtomicPtr<TCB> = AtomicPtr::new(ptr::null_mut());
 
 pub unsafe fn init_kernel(tasks: &[TaskDesc], idle_index: usize) -> &mut Kernel {
@@ -102,6 +105,20 @@ pub struct SavedThreadState {
     s31: u32,
 }
 
+impl SavedThreadState {
+    fn syscall_args(&self) -> &SyscallArgs {
+        // Safety: repr(c) guarentees the order of fields, we are taking the first
+        // 6 fields as SyscallArgs
+        unsafe { core::mem::transmute(self) }
+    }
+
+    fn syscall_args_mut(&mut self) -> &mut SyscallArgs {
+        // Safety: repr(c) guarentees the order of fields, we are taking the first
+        // 6 fields as SyscallArgs
+        unsafe { core::mem::transmute(self) }
+    }
+}
+
 #[repr(C)]
 #[derive(Default)]
 pub struct ExceptionFrame {
@@ -128,15 +145,55 @@ pub unsafe extern "C" fn SVCall() {
         mov r1, #0xFFFFFFF3
         bic r0, r1
         cmp r0, #0x8
-        beq 1f
-        @ TODO(sphw): implement normal syscall convention
+        beq 1f @ jump to first task handler
+        @ standard syscall convention
+        movw r0, #:lower16:CURRENT_TCB
+        movt r0, #:upper16:CURRENT_TCB
+        ldr r1, [r0] @ load the value of CURRENT_TCB into r1
+        movs r2, r1
+        mrs r12, PSP @ store PSP in r12
+        stm r2!, {{r4-r12, lr}} @ store r4-r11 & psp in r12
+        vstm r2, {{s16-s31}} @ store float registers
+        movs r0, r11 @ syscall index is stored in r11
+        bl {inner}
+        movw r0, #:lower16:CURRENT_TCB
+        movt r0, #:upper16:CURRENT_TCB
+        ldr r0, [r0]
+        @ restore volatile registers, plus load PSP into r12
+        ldm r0!, {{r4-r12, lr}}
+        vldm r0, {{s16-s31}}
+        msr PSP, r12
+
         1:
         movs r0, #1
         msr CONTROL, r0
         mov lr, {exc_return}
         bx lr
         ",
+        inner = sym syscall_inner,
         exc_return = const EXC_RETURN,
         options(noreturn)
     )
+}
+
+fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
+    // TODO(sphw): figure out how safe this is,
+    // do we need to copy
+    let args = unsafe {
+        let tcb = &*CURRENT_TCB.load(Ordering::SeqCst);
+        tcb.saved_state.syscall_args()
+    };
+    let kernel = unsafe { &mut *kernel() };
+    let (next_tcb, ret) = kernel.syscall(index, args).unwrap();
+    let args = unsafe {
+        let tcb = &mut *CURRENT_TCB.load(Ordering::SeqCst);
+        tcb.saved_state.syscall_args_mut()
+    };
+    let (a1, a2) = ret.split();
+    args.arg1 = a2 as usize;
+    args.arg2 = a1 as usize;
+    if let Some(tcb_ref) = next_tcb {
+        unsafe { set_current_tcb(kernel.scheduler.get_tcb(tcb_ref).unwrap()) }
+    }
+    ret
 }

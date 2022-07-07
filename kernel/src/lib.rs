@@ -1,6 +1,7 @@
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![allow(dead_code)]
 #![feature(asm_const)]
+#![feature(asm_sym)]
 #![feature(ptr_metadata)]
 #![feature(strict_provenance)]
 #![feature(naked_functions)]
@@ -10,6 +11,9 @@ pub mod task_ptr;
 
 extern crate alloc;
 
+use abi::{
+    Capability, CapabilityRef, Endpoint, SyscallArgs, SyscallReturn, SyscallReturnType, ThreadRef,
+};
 use alloc::boxed::Box;
 use cordyceps::{
     list::{self, Links},
@@ -166,6 +170,36 @@ impl Kernel {
             .unwrap_or(self.scheduler.current_thread.tcb_ref);
         let tcb = self.scheduler.get_tcb(tcb_ref).unwrap();
         arch::start_root_task(&tcb);
+    }
+
+    pub fn syscall(
+        &mut self,
+        index: abi::SyscallIndex,
+        args: &SyscallArgs,
+    ) -> Result<(Option<ThreadRef>, SyscallReturn), KernelError> {
+        match index.get(abi::SyscallIndex::SYSCALL_FN) {
+            abi::SyscallFn::Send => todo!(),
+            abi::SyscallFn::Call => todo!(),
+            abi::SyscallFn::Recv => todo!(),
+            abi::SyscallFn::Log => todo!(),
+            abi::SyscallFn::Caps => {
+                //TODO(sphw): check length bounds
+                //TODO(sphw): refactor into own func
+                let tcb = self.scheduler.current_thread()?;
+                let slice = unsafe {
+                    core::slice::from_raw_parts_mut(
+                        args.arg1 as *mut Capability,
+                        args.arg2 as usize,
+                    )
+                };
+                let len = slice.len().min(tcb.capabilities.len());
+                slice[0..len].clone_from_slice(&tcb.capabilities[..len]); // TODO: code this defensivly
+                let ret = SyscallReturn::new()
+                    .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy)
+                    .with(SyscallReturn::SYSCALL_LEN, len as u64);
+                Ok((None, ret))
+            }
+        }
     }
 }
 
@@ -377,7 +411,7 @@ pub struct TCB {
     priority: usize,
     budget: usize,
     cooldown: usize,
-    capabilities: Vec<Capability, 2>,
+    capabilities: Vec<Capability, 10>,
     stack_pointer: usize,
     entrypoint: usize,
 }
@@ -395,6 +429,10 @@ impl TCB {
         };
         Ok(*endpoint)
     }
+
+    pub fn add_cap(&mut self, capability: Capability) {
+        let _ = self.capabilities.push(capability);
+    }
 }
 
 #[derive(Default)]
@@ -409,23 +447,6 @@ impl DomainEntry {
             tcb_ref: Some(tcb_ref),
             links: Default::default(),
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ThreadRef(usize);
-
-impl Deref for ThreadRef {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl ThreadRef {
-    const fn idle() -> ThreadRef {
-        ThreadRef(0)
     }
 }
 
@@ -468,7 +489,7 @@ pub struct Task {
     ram_memory_region: Range<usize>,
     stack_size: usize,
     available_stack_ptr: Vec<Range<usize>, 8>,
-    capabilities: Vec<Capability, 2>,
+    capabilities: Vec<Capability, 10>,
     entrypoint: TaskPtr<'static, fn() -> !>,
     secure: bool,
 }
@@ -479,7 +500,7 @@ impl Task {
         ram_memory_region: Range<usize>,
         stack_size: usize,
         available_stack_ptr: Vec<Range<usize>, 8>,
-        capabilities: Vec<Capability, 2>,
+        capabilities: Vec<Capability, 10>,
         entrypoint: TaskPtr<'static, fn() -> !>,
         secure: bool,
     ) -> Self {
@@ -577,27 +598,6 @@ macro_rules! linked_impl {
 
 linked_impl! {IPCMsg }
 linked_impl! { DomainEntry }
-
-#[derive(Clone)]
-pub enum Capability {
-    Endpoint(Endpoint),
-    Notification,
-}
-
-pub struct CapabilityRef(usize);
-impl Deref for CapabilityRef {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Endpoint {
-    tcb_ref: ThreadRef,
-    addr: usize,
-}
 
 pub struct TaskDesc {
     pub name: &'static str,
