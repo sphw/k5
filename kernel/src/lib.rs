@@ -33,12 +33,12 @@ const PRIORITY_COUNT: usize = 8;
 
 pub struct Kernel {
     pub scheduler: Scheduler,
-    tasks: Vec<Task, 2>,
+    tasks: Vec<Task, 5>,
 }
 
 impl Kernel {
     pub fn from_tasks(tasks: &[TaskDesc], idle_index: usize) -> Result<Self, KernelError> {
-        let tasks = tasks
+        let mut tasks: heapless::Vec<_, 5> = tasks
             .into_iter()
             .map(|desc| {
                 Task::new(
@@ -52,11 +52,23 @@ impl Kernel {
                 )
             })
             .collect();
+        // tasks.insert(
+        //     0,
+        //     Task::new(
+        //         0..0x400,
+        //         0..0x400,
+        //         100,
+        //         Vec::from_slice(&[0..200]).unwrap(),
+        //         Vec::default(),
+        //         unsafe { TaskPtr::from_raw_parts(1, ()) },
+        //         false,
+        //     ),
+        // );
         let kernel = Kernel::new(tasks, TaskRef(idle_index))?;
         Ok(kernel)
     }
 
-    pub fn new(tasks: Vec<Task, 2>, idle_ref: TaskRef) -> Result<Self, KernelError> {
+    pub fn new(tasks: Vec<Task, 5>, idle_ref: TaskRef) -> Result<Self, KernelError> {
         let current_thread = ThreadTime {
             tcb_ref: ThreadRef(0),
             time: 20,
@@ -102,13 +114,13 @@ impl Kernel {
         self.scheduler.spawn(tcb)
     }
 
-    fn task(&self, task_ref: TaskRef) -> Result<&Task, KernelError> {
+    pub fn task(&self, task_ref: TaskRef) -> Result<&Task, KernelError> {
         self.tasks
             .get(task_ref.0)
             .ok_or(KernelError::InvalidTaskRef)
     }
 
-    fn task_mut(&mut self, task_ref: TaskRef) -> Result<&mut Task, KernelError> {
+    pub fn task_mut(&mut self, task_ref: TaskRef) -> Result<&mut Task, KernelError> {
         self.tasks
             .get_mut(task_ref.0)
             .ok_or(KernelError::InvalidTaskRef)
@@ -399,11 +411,12 @@ pub enum KernelError {
 }
 
 #[derive(Clone, Copy)]
-pub struct TaskRef(usize);
+pub struct TaskRef(pub usize);
 
 #[repr(C)]
 pub struct TCB {
     saved_state: arch::SavedThreadState,
+    //_pad: usize,
     task: TaskRef, // Maybe use RC for this
     req_queue: MpscQueue<IPCMsg>,
     reply_queue: MpscQueue<IPCMsg>,
@@ -468,6 +481,7 @@ impl TCB {
     ) -> Self {
         Self {
             task,
+            //_pad: 0,
             req_queue: MpscQueue::new_with_stub(Box::pin(IPCMsg::default())),
             reply_queue: MpscQueue::new_with_stub(Box::pin(IPCMsg::default())),
             state: ThreadState::Ready,
@@ -490,7 +504,7 @@ pub struct Task {
     stack_size: usize,
     available_stack_ptr: Vec<Range<usize>, 8>,
     capabilities: Vec<Capability, 10>,
-    entrypoint: TaskPtr<'static, fn() -> !>,
+    pub entrypoint: TaskPtr<'static, fn() -> !>,
     secure: bool,
 }
 
@@ -535,9 +549,8 @@ impl Task {
     fn alloc_stack(&mut self) -> Option<usize> {
         for range in &mut self.available_stack_ptr {
             if range.len() >= self.stack_size {
-                let stack_start = range.start;
                 range.start += self.stack_size;
-                return Some(stack_start);
+                return Some(range.start);
                 //TODO: cleanup empty ranges might need to use LL
             }
         }

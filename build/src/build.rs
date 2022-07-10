@@ -120,6 +120,7 @@ impl Config {
         };
         let mut current_flash_loc = self.flash.address + self.kernel.flash_size;
         let mut current_ram_loc = self.ram.address + self.kernel.ram_size;
+
         let task_table = relocs
             .iter()
             .zip(self.tasks.iter())
@@ -425,7 +426,6 @@ impl SRecWriter {
                 &image[header.p_offset as usize..(header.p_offset + header.p_filesz) as usize];
             let mut addr = header.p_paddr as u32;
             for chunk in data.chunks(250) {
-                println!("adding rec for : {:x?} {:?}", addr, chunk.len());
                 self.buf.push(srec::Record::S3(srec::Data {
                     address: srec::Address32(addr),
                     data: chunk.to_vec(),

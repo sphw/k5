@@ -1,16 +1,16 @@
 use core::arch::asm;
-use core::mem::MaybeUninit;
 use core::{
-    ptr,
+    mem, ptr,
     sync::atomic::{AtomicPtr, Ordering},
 };
+use mem::MaybeUninit;
 
 use abi::{SyscallArgs, SyscallIndex, SyscallReturn};
 
 use crate::{task_ptr::TaskPtrMut, Kernel, Task, TaskDesc, TCB};
 
 const INITIAL_PSR: u32 = 1 << 24;
-const EXC_RETURN: u32 = 0xFFFFFFFD; //FIXME(sphw): this is only correct on v8m in secure mode
+const EXC_RETURN: u32 = 0xFFFFFFED; //FIXME(sphw): this is only correct on v8m in secure mode
 
 static mut KERNEL: MaybeUninit<Kernel> = MaybeUninit::uninit();
 #[no_mangle]
@@ -31,7 +31,7 @@ unsafe fn current_tcb() -> *mut TCB {
 }
 
 unsafe fn set_current_tcb(task: &TCB) {
-    CURRENT_TCB.store(core::mem::transmute(task), Ordering::SeqCst);
+    CURRENT_TCB.store(mem::transmute(task), Ordering::SeqCst);
 }
 
 pub fn start_root_task(task: &TCB) -> ! {
@@ -40,7 +40,7 @@ pub fn start_root_task(task: &TCB) -> ! {
     }
 
     unsafe {
-        cortex_m::register::psp::write(task.stack_pointer as u32);
+        cortex_m::register::psp::write(task.saved_state.psp as u32);
     }
     // The goal here is to jump to our task in unprivelleged mode,
     // but for ARM requires you to be in Handler mode to switch the privillege level
@@ -61,16 +61,17 @@ pub fn start_root_task(task: &TCB) -> ! {
 }
 
 pub fn init_tcb_stack(task: &Task, tcb: &mut TCB) {
+    let stack_addr = tcb.stack_pointer - mem::size_of::<ExceptionFrame>();
     let mut stack_ptr: TaskPtrMut<ExceptionFrame> =
-        unsafe { TaskPtrMut::from_raw_parts(tcb.stack_pointer, ()) };
+        unsafe { TaskPtrMut::from_raw_parts(stack_addr, ()) };
     let stack_exc_frame = task
         .validate_mut_ptr(&mut stack_ptr)
         .expect("stack pointer not in task memory");
     *stack_exc_frame = ExceptionFrame::default();
-    stack_exc_frame.pc = (tcb.entrypoint) as u32;
+    stack_exc_frame.pc = (tcb.entrypoint | 1) as u32;
     stack_exc_frame.xpsr = INITIAL_PSR;
     stack_exc_frame.lr = 0xFFFF_FFFF;
-    tcb.saved_state.psp = tcb.stack_pointer as u32;
+    tcb.saved_state.psp = stack_addr as u32;
     tcb.saved_state.exc_return = EXC_RETURN;
 }
 
@@ -109,13 +110,13 @@ impl SavedThreadState {
     fn syscall_args(&self) -> &SyscallArgs {
         // Safety: repr(c) guarentees the order of fields, we are taking the first
         // 6 fields as SyscallArgs
-        unsafe { core::mem::transmute(self) }
+        unsafe { mem::transmute(self) }
     }
 
     fn syscall_args_mut(&mut self) -> &mut SyscallArgs {
         // Safety: repr(c) guarentees the order of fields, we are taking the first
         // 6 fields as SyscallArgs
-        unsafe { core::mem::transmute(self) }
+        unsafe { mem::transmute(self) }
     }
 }
 
@@ -164,6 +165,8 @@ pub unsafe extern "C" fn SVCall() {
         vldm r0, {{s16-s31}}
         msr PSP, r12
 
+        bx lr
+
         1:
         movs r0, #1
         msr CONTROL, r0
@@ -174,6 +177,39 @@ pub unsafe extern "C" fn SVCall() {
         exc_return = const EXC_RETURN,
         options(noreturn)
     )
+}
+
+#[allow(non_snake_case)]
+#[naked]
+#[no_mangle]
+pub unsafe extern "C" fn SysTick() {
+    asm!(
+        " movw r0, #:lower16:CURRENT_TCB
+        movt r0, #:upper16:CURRENT_TCB
+        ldr r1, [r0] @ load the value of CURRENT_TCB into r1
+        movs r2, r1
+        mrs r12, PSP @ store PSP in r12
+        stm r2!, {{r4-r12, lr}} @ store r4-r11 & psp in r12
+        vstm r2, {{s16-s31}} @ store float registers
+        bl {inner}
+        movw r0, #:lower16:CURRENT_TCB
+        movt r0, #:upper16:CURRENT_TCB
+        ldr r0, [r0]
+        @ restore volatile registers, plus load PSP into r12
+        ldm r0!, {{r4-r12, lr}}
+        vldm r0, {{s16-s31}}
+        msr PSP, r12
+        ",
+        inner = sym systick_inner,
+        options(noreturn)
+    )
+}
+
+fn systick_inner() {
+    let kernel = unsafe { &mut *kernel() };
+    if let Some(tcb_ref) = kernel.scheduler.tick().unwrap() {
+        unsafe { set_current_tcb(kernel.scheduler.get_tcb(tcb_ref).unwrap()) }
+    }
 }
 
 fn syscall_inner(index: SyscallIndex) -> SyscallReturn {

@@ -57,7 +57,9 @@ ram_region: {:?},
 }
 
 pub fn gen_tasklist() -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo:rerun-if-env-changed=K5_TASK_LIST");
     let env = env::var("K5_TASK_LIST")?;
+    println!("cargo:rerun-if-changed={}", env);
     let task_list = fs::read(env)?;
     let task_list: TaskList = serde_json::from_slice(&task_list)?;
     let code = task_list.gen_code();
