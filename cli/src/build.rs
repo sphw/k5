@@ -22,6 +22,8 @@ use std::{
     process::{Command, Stdio},
 };
 
+use crate::flash;
+
 static TASK_RLINK_BYTES: &[u8] = include_bytes!("task-rlink.x");
 static TASK_TLINK_BYTES: &[u8] = include_bytes!("task-tlink.x");
 static TASK_LINK_BYTES: &[u8] = include_bytes!("task-link.x");
@@ -29,6 +31,8 @@ static KERN_LINK_BYTES: &[u8] = include_bytes!("kern-link.x");
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    probe: flash::FlashConfig,
     tasks: Vec<Task>,
     flash: MemorySection,
     ram: MemorySection,
@@ -72,7 +76,7 @@ enum TaskSource {
 }
 
 impl Config {
-    pub fn build(&mut self, app_path: &PathBuf) -> Result<()> {
+    pub fn build(&mut self, app_path: &Path) -> Result<()> {
         if self.kernel.crate_path.is_relative() {
             self.kernel.crate_path =
                 fs::canonicalize(app_path.join(self.kernel.crate_path.clone()))?;
@@ -126,7 +130,7 @@ impl Config {
             .zip(self.tasks.iter())
             .map(|(reloc, task)| {
                 let elf = &task.target_dir().join("size.elf");
-                task.link(reloc, &elf, &full_size_loc, TASK_TLINK_BYTES)?;
+                task.link(reloc, elf, &full_size_loc, TASK_TLINK_BYTES)?;
                 let size = get_elf_size(elf, &self.flash, &self.ram, task.stack_space_size)?;
                 println!("task {:?} size: {:?}", task.name, size);
                 let entry = TaskTableEntry {
@@ -164,7 +168,7 @@ impl Config {
             .map(|(elf, entry)| {
                 let TaskTableEntry { task, loc } = entry;
                 println!("writing task: {:?} {:?}", task.name, elf);
-                let entrypoint = output.write(&elf)?;
+                let entrypoint = output.write(elf)?;
                 Ok(codegen::Task {
                     name: task.name.clone(),
                     entrypoint,
@@ -280,7 +284,7 @@ impl Task {
         let target_dir = crate_path.join("target");
         fs::create_dir_all(&target_dir)?;
         fs::write(target_dir.join("link.x"), TASK_RLINK_BYTES)?;
-        build_crate(&crate_path, true, None)
+        build_crate(crate_path, true, None)
     }
 
     fn link(
@@ -434,10 +438,6 @@ impl SRecWriter {
             }
         }
         Ok(elf.header.e_entry as u32)
-    }
-
-    fn kern_entry(&mut self, loc: u32) {
-        self.buf.push(srec::Record::S7(srec::Address32(loc)));
     }
 
     fn finalize(mut self) -> String {

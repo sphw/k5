@@ -1,5 +1,5 @@
 [package]
-name = "k5-build"
+name = "k5"
 version = "0.1.0"
 edition = "2021"
 
@@ -13,6 +13,8 @@ color-eyre = "0.5"
 colored = "2"
 config = { version = "0.11", default-features = false, features = ["toml"] }
 goblin = "0.5"
+probe-rs = { git = "https://github.com/probe-rs/probe-rs.git" }
+probe-rs-cli-util = { git = "https://github.com/probe-rs/probe-rs.git", default-features = false, features=["anyhow"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 srec = "0.2"
