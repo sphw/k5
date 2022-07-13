@@ -80,12 +80,13 @@ unsafe extern "C" fn syscall(index: SyscallIndex, args: &mut SyscallArgs) -> Sys
     )
 }
 
-pub fn send_page<T: ?Sized>(capability: CapabilityRef, r: &mut T) -> Result<(), Error> {
+#[inline]
+fn send<T: ?Sized>(ty: SyscallDataType, capability: CapabilityRef, r: &mut T) -> Result<(), Error> {
     let size = core::mem::size_of_val(r);
     let (ptr, _) = (r as *mut T).to_raw_parts();
     let addr = ptr.addr();
     let index = SyscallIndex::new()
-        .with(SyscallIndex::SYSCALL_ARG_TYPE, SyscallDataType::Page)
+        .with(SyscallIndex::SYSCALL_ARG_TYPE, ty)
         .with(SyscallIndex::SYSCALL_FN, SyscallFn::Send)
         .with(SyscallIndex::CAPABILITY, *capability as u32);
     let mut args = SyscallArgs {
@@ -102,6 +103,38 @@ pub fn send_page<T: ?Sized>(capability: CapabilityRef, r: &mut T) -> Result<(), 
         _ => {}
     }
     Ok(())
+}
+
+#[inline]
+pub fn log(data: &[u8]) -> Result<(), Error> {
+    let (ptr, _) = data.as_ptr().to_raw_parts();
+    let addr = ptr.addr();
+    let index = SyscallIndex::new()
+        .with(SyscallIndex::SYSCALL_ARG_TYPE, SyscallDataType::Copy)
+        .with(SyscallIndex::SYSCALL_FN, SyscallFn::Log);
+    let mut args = SyscallArgs {
+        arg1: addr,
+        arg2: data.len(),
+        ..Default::default()
+    };
+    let res = unsafe { syscall(index, &mut args) };
+    match res.get(SyscallReturn::SYSCALL_TYPE) {
+        SyscallReturnType::Error => {
+            let code = res.get(SyscallReturn::SYSCALL_LEN);
+            return Err(abi::Error::from(code as u8));
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+pub fn send_page<T: ?Sized>(capability: CapabilityRef, r: &mut T) -> Result<(), Error> {
+    // TODO: statically ensure size / alignment
+    send(SyscallDataType::Page, capability, r)
+}
+
+pub fn send_copy<T: ?Sized>(capability: CapabilityRef, r: &mut T) -> Result<(), Error> {
+    send(SyscallDataType::Copy, capability, r)
 }
 
 pub fn get_caps() -> Result<CapList, Error> {

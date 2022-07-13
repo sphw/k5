@@ -6,6 +6,7 @@ use core::{
 use mem::MaybeUninit;
 
 use abi::{SyscallArgs, SyscallIndex, SyscallReturn};
+use rtt_target::{rtt_init, rtt_init_print, TerminalChannel, UpChannel};
 
 use crate::{task_ptr::TaskPtrMut, Kernel, Task, TaskDesc, TCB};
 
@@ -17,6 +18,7 @@ static mut KERNEL: MaybeUninit<Kernel> = MaybeUninit::uninit();
 static mut CURRENT_TCB: AtomicPtr<TCB> = AtomicPtr::new(ptr::null_mut());
 
 pub unsafe fn init_kernel(tasks: &[TaskDesc], idle_index: usize) -> &mut Kernel {
+    init_log();
     KERNEL.write(Kernel::from_tasks(tasks, idle_index).unwrap())
 }
 
@@ -179,31 +181,31 @@ pub unsafe extern "C" fn SVCall() {
     )
 }
 
-#[allow(non_snake_case)]
-#[naked]
-#[no_mangle]
-pub unsafe extern "C" fn SysTick() {
-    asm!(
-        " movw r0, #:lower16:CURRENT_TCB
-        movt r0, #:upper16:CURRENT_TCB
-        ldr r1, [r0] @ load the value of CURRENT_TCB into r1
-        movs r2, r1
-        mrs r12, PSP @ store PSP in r12
-        stm r2!, {{r4-r12, lr}} @ store r4-r11 & psp in r12
-        vstm r2, {{s16-s31}} @ store float registers
-        bl {inner}
-        movw r0, #:lower16:CURRENT_TCB
-        movt r0, #:upper16:CURRENT_TCB
-        ldr r0, [r0]
-        @ restore volatile registers, plus load PSP into r12
-        ldm r0!, {{r4-r12, lr}}
-        vldm r0, {{s16-s31}}
-        msr PSP, r12
-        ",
-        inner = sym systick_inner,
-        options(noreturn)
-    )
-}
+// #[allow(non_snake_case)]
+// #[naked]
+// #[no_mangle]
+// pub unsafe extern "C" fn SysTick() {
+//     asm!(
+//         " movw r0, #:lower16:CURRENT_TCB
+//         movt r0, #:upper16:CURRENT_TCB
+//         ldr r1, [r0] @ load the value of CURRENT_TCB into r1
+//         movs r2, r1
+//         mrs r12, PSP @ store PSP in r12
+//         stm r2!, {{r4-r12, lr}} @ store r4-r11 & psp in r12
+//         vstm r2, {{s16-s31}} @ store float registers
+//         bl {inner}
+//         movw r0, #:lower16:CURRENT_TCB
+//         movt r0, #:upper16:CURRENT_TCB
+//         ldr r0, [r0]
+//         @ restore volatile registers, plus load PSP into r12
+//         ldm r0!, {{r4-r12, lr}}
+//         vldm r0, {{s16-s31}}
+//         msr PSP, r12
+//         ",
+//         inner = sym systick_inner,
+//         options(noreturn)
+//     )
+// }
 
 fn systick_inner() {
     let kernel = unsafe { &mut *kernel() };
@@ -232,4 +234,30 @@ fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
         unsafe { set_current_tcb(kernel.scheduler.get_tcb(tcb_ref).unwrap()) }
     }
     ret
+}
+
+// RTT
+
+static mut CHANNEL: Option<UpChannel> = None;
+
+unsafe fn init_log() {
+    let channels = rtt_init! {
+            up: {
+                0: {
+                    size: 1024
+                    mode: BlockIfFull
+                    name: "defmt"
+                }
+            }
+
+    };
+
+    CHANNEL = Some(channels.up.0);
+    //rtt_init_print! {}
+}
+
+pub unsafe fn log(bytes: &[u8]) {
+    if let Some(ch) = &mut CHANNEL {
+        ch.write(bytes);
+    }
 }

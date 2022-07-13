@@ -193,7 +193,22 @@ impl Kernel {
             abi::SyscallFn::Send => todo!(),
             abi::SyscallFn::Call => todo!(),
             abi::SyscallFn::Recv => todo!(),
-            abi::SyscallFn::Log => todo!(),
+            abi::SyscallFn::Log => {
+                let tcb = self.scheduler.current_thread()?;
+                let slice = unsafe {
+                    core::slice::from_raw_parts(args.arg1 as *const u8, args.arg2 as usize)
+                };
+                let mut buf = [0; 1024];
+                if slice.len() >= 1024 {
+                    return Ok((None, SyscallReturn::new())); //TODO(sphw): use proper error
+                }
+                buf[0] = tcb.task.0 as u8;
+                // NOTE: this assumes that the internal task index is the same as codegen task index, which is true for embedded,
+                // but for systems with dynamic tasks is not true.
+                buf[1..slice.len() + 1].clone_from_slice(&slice);
+                unsafe { arch::log(&buf[..slice.len() + 1]) };
+                Ok((None, SyscallReturn::new()))
+            }
             abi::SyscallFn::Caps => {
                 //TODO(sphw): check length bounds
                 //TODO(sphw): refactor into own func

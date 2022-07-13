@@ -5,9 +5,10 @@ use std::{
 
 use clap::Parser;
 use color_eyre::Result;
-use probe_rs_cli_util::common_options::ProbeOptions;
 mod build;
+mod elf;
 mod flash;
+mod logs;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -17,7 +18,22 @@ fn main() -> color_eyre::Result<()> {
             let mut config = parse_config(&path)?;
             config.build(&path)?;
         }
-        Args::Flash { path, probe } => {}
+        Args::Flash { path, probe } => {
+            let mut config = parse_config(&path)?;
+            let target = config.build(&path)?;
+            let ihex_path = target.join("final.ihex");
+            config.probe.merge(probe);
+            flash::flash(config.probe, ihex_path)?;
+        }
+        Args::Logs { path, probe } => {
+            let mut config = parse_config(&path)?;
+            let target = config.build(&path)?;
+            let ihex_path = target.join("final.ihex");
+            config.probe.merge(probe);
+            let mut session = flash::flash(config.probe.clone(), ihex_path)?;
+            let kernel_path = target.join("kernel.elf");
+            logs::print_logs(&config, kernel_path, &mut session)?;
+        }
     }
     Ok(())
 }
@@ -29,6 +45,13 @@ enum Args {
         path: PathBuf,
     },
     Flash {
+        #[clap(default_value = ".")]
+        path: PathBuf,
+        #[clap(flatten)]
+        probe: flash::FlashConfig,
+    },
+
+    Logs {
         #[clap(default_value = ".")]
         path: PathBuf,
         #[clap(flatten)]

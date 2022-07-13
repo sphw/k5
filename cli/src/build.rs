@@ -32,8 +32,8 @@ static KERN_LINK_BYTES: &[u8] = include_bytes!("kern-link.x");
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
-    probe: flash::FlashConfig,
-    tasks: Vec<Task>,
+    pub probe: flash::FlashConfig,
+    pub tasks: Vec<Task>,
     flash: MemorySection,
     ram: MemorySection,
     stack_size: Option<u32>,
@@ -42,8 +42,8 @@ pub struct Config {
 }
 
 #[derive(Debug, Deserialize)]
-struct Task {
-    name: String,
+pub struct Task {
+    pub name: String,
     #[serde(flatten)]
     source: TaskSource,
     #[allow(dead_code)]
@@ -76,7 +76,7 @@ enum TaskSource {
 }
 
 impl Config {
-    pub fn build(&mut self, app_path: &Path) -> Result<()> {
+    pub fn build(&mut self, app_path: &Path) -> Result<PathBuf> {
         if self.kernel.crate_path.is_relative() {
             self.kernel.crate_path =
                 fs::canonicalize(app_path.join(self.kernel.crate_path.clone()))?;
@@ -186,9 +186,26 @@ impl Config {
 
         let out = output.finalize();
         let out_path = self.kernel.crate_path.join("target").join("final.srec");
-        fs::write(out_path, &out)?;
+        fs::write(&out_path, &out)?;
+        let ihex_path = self.kernel.crate_path.join("target").join("final.ihex");
+        let output = Command::new("arm-none-eabi-objcopy")
+            .arg("-Isrec")
+            .arg(out_path)
+            .arg(ihex_path)
+            .arg("-Oihex")
+            .output()?;
+        if !output.status.success() {
+            return Err(anyhow!(
+                "objcopy failed: {:?}",
+                std::str::from_utf8(&output.stderr)
+            ));
+        }
+        fs::copy(
+            &kernel,
+            self.kernel.crate_path.join("target").join("kernel.elf"),
+        )?;
 
-        Ok(())
+        Ok(self.kernel.crate_path.join("target"))
     }
 }
 
@@ -273,7 +290,7 @@ fn build_crate(crate_path: &Path, relocate: bool, task_list: Option<&Path>) -> R
 }
 
 impl Task {
-    fn target_dir(&self) -> PathBuf {
+    pub fn target_dir(&self) -> PathBuf {
         let TaskSource::Crate { crate_path } = &self.source;
         crate_path.join("target")
     }
