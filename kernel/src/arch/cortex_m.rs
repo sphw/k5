@@ -3,10 +3,12 @@ use core::{
     mem, ptr,
     sync::atomic::{AtomicPtr, Ordering},
 };
+use cortex_m::peripheral::scb::SystemHandler;
+use cortex_m::peripheral::NVIC;
 use mem::MaybeUninit;
 
 use abi::{SyscallArgs, SyscallIndex, SyscallReturn};
-use rtt_target::{rtt_init, rtt_init_print, TerminalChannel, UpChannel};
+use rtt_target::{rtt_init, UpChannel};
 
 use crate::{task_ptr::TaskPtrMut, Kernel, Task, TaskDesc, TCB};
 
@@ -41,9 +43,46 @@ pub fn start_root_task(task: &TCB) -> ! {
         set_current_tcb(task);
     }
 
+    let mut p = cortex_m::Peripherals::take().unwrap();
+
+    // set systick to lowest priority, so it won't interrupt the kernel
+    unsafe {
+        p.SCB.set_priority(SystemHandler::SysTick, 0xff);
+    }
+
+    let irq_count = (((p.ICB.ictr.read() & 0xF) + 1) * 32) as usize;
+    // gets the irq count from icb's ictr register
+    // ictr gives the count in blocks of 32, in the first 4 bytes.
+
+    // Safety: this operation is "safe", because `start_root_task`,
+    // is only ever run durring startup. Changing interrupt prioritys
+    // CAN cause issues in criticial sections, but we aren't using those
+    unsafe {
+        for i in 0..irq_count {
+            p.NVIC.ipr[i].write(0xFFu8);
+        }
+    }
+
+    // p.SYST.set_reload(400_000);
+    // p.SYST.clear_current();
+    // p.SYST.enable_counter();
+    // p.SYST.enable_interrupt();
+    // assert!(p.SYST.is_interrupt_enabled());
+    // assert!(p.SYST.is_counter_enabled());
+    unsafe {
+        let syst = &*cortex_m::peripheral::SYST::PTR;
+        // set the number of ticks per interrupt
+        syst.rvr.write(400_000);
+        // clear counter
+        syst.cvr.write(0);
+        // enable counter and interrupt
+        syst.csr.modify(|v| v | 0b111);
+    }
+
     unsafe {
         cortex_m::register::psp::write(task.saved_state.psp as u32);
     }
+
     // The goal here is to jump to our task in unprivelleged mode,
     // but for ARM requires you to be in Handler mode to switch the privillege level
     // of execution. So we call a sys call with a specific argument, that is handled as a
@@ -181,31 +220,32 @@ pub unsafe extern "C" fn SVCall() {
     )
 }
 
-// #[allow(non_snake_case)]
-// #[naked]
-// #[no_mangle]
-// pub unsafe extern "C" fn SysTick() {
-//     asm!(
-//         " movw r0, #:lower16:CURRENT_TCB
-//         movt r0, #:upper16:CURRENT_TCB
-//         ldr r1, [r0] @ load the value of CURRENT_TCB into r1
-//         movs r2, r1
-//         mrs r12, PSP @ store PSP in r12
-//         stm r2!, {{r4-r12, lr}} @ store r4-r11 & psp in r12
-//         vstm r2, {{s16-s31}} @ store float registers
-//         bl {inner}
-//         movw r0, #:lower16:CURRENT_TCB
-//         movt r0, #:upper16:CURRENT_TCB
-//         ldr r0, [r0]
-//         @ restore volatile registers, plus load PSP into r12
-//         ldm r0!, {{r4-r12, lr}}
-//         vldm r0, {{s16-s31}}
-//         msr PSP, r12
-//         ",
-//         inner = sym systick_inner,
-//         options(noreturn)
-//     )
-// }
+#[allow(non_snake_case)]
+#[naked]
+#[no_mangle]
+pub unsafe extern "C" fn SysTick() {
+    asm!(
+        " movw r0, #:lower16:CURRENT_TCB
+         movt r0, #:upper16:CURRENT_TCB
+         ldr r1, [r0] @ load the value of CURRENT_TCB into r1
+         movs r2, r1
+         mrs r12, PSP @ store PSP in r12
+         stm r2!, {{r4-r12, lr}} @ store r4-r11 & psp in r12
+         vstm r2, {{s16-s31}} @ store float registers
+         bl {inner}
+         movw r0, #:lower16:CURRENT_TCB
+         movt r0, #:upper16:CURRENT_TCB
+         ldr r0, [r0]
+         @ restore volatile registers, plus load PSP into r12
+         ldm r0!, {{r4-r12, lr}}
+         vldm r0, {{s16-s31}}
+         msr PSP, r12
+        bx lr
+         ",
+        inner = sym systick_inner,
+        options(noreturn)
+    )
+}
 
 fn systick_inner() {
     let kernel = unsafe { &mut *kernel() };
@@ -253,7 +293,6 @@ unsafe fn init_log() {
     };
 
     CHANNEL = Some(channels.up.0);
-    //rtt_init_print! {}
 }
 
 pub unsafe fn log(bytes: &[u8]) {

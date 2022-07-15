@@ -139,7 +139,7 @@ impl From<u8> for Error {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, defmt::Format)]
 pub struct CapabilityRef(pub usize);
 impl Deref for CapabilityRef {
     type Target = usize;
@@ -149,7 +149,7 @@ impl Deref for CapabilityRef {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, defmt::Format)]
 #[repr(C)]
 pub enum Capability {
     Endpoint(Endpoint),
@@ -157,13 +157,13 @@ pub enum Capability {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, defmt::Format)]
 pub struct Endpoint {
     pub tcb_ref: ThreadRef,
     pub addr: usize,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, defmt::Format)]
 #[repr(C)]
 pub struct ThreadRef(pub usize);
 

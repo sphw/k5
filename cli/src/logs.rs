@@ -32,7 +32,7 @@ fn attach_rtt(elf: &Elf, session: &mut Session) -> Result<UpChannel> {
             .ok_or_else(|| anyhow!("RTT up channel 0 not found"))?;
         return Ok(channel);
     }
-    return Err(anyhow!("failed to attach rtt"));
+    Err(anyhow!("failed to attach rtt"))
 }
 
 pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) -> Result<()> {
@@ -53,7 +53,7 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
     let task_elfs = task_elf_data
         .iter()
         .map(|elf_data| {
-            let elf = crate::elf::Elf::parse(&elf_data).map_err(|e| anyhow!(e))?;
+            let elf = crate::elf::Elf::parse(elf_data).map_err(|e| anyhow!(e))?;
             Ok(elf)
         })
         .collect::<Result<Vec<_>>>()?;
@@ -67,9 +67,9 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
             Ok(table.new_stream_decoder())
         })
         .collect::<Result<Vec<_>>>()?;
-    let mut elf = Elf::parse(&elf_data).map_err(|e| anyhow!(e))?;
+    let elf = Elf::parse(&elf_data).map_err(|e| anyhow!(e))?;
     session.core(0).unwrap().reset_and_halt(TIMEOUT)?;
-    start_program(session, &mut elf)?;
+    start_program(session, &elf)?;
     let rtt = attach_rtt(&elf, session)?;
     let mut core = session.core(0)?;
     let mut read_buf = [0; 1024];
@@ -156,8 +156,7 @@ fn set_rtt_to_blocking(
 
 fn print_location(file: &str, line: u32, module_path: &str) -> io::Result<()> {
     let mod_path = module_path;
-    let mut loc = file.to_string();
-    loc.push_str(&format!(":{}", line));
+    let loc = format!("{}:{}", file, line);
     println!("{}", format!("└─ {} @ {}", mod_path, loc).dimmed());
     Ok(())
 }

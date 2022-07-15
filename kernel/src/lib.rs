@@ -21,7 +21,7 @@ use cordyceps::{
 };
 use core::{
     mem::{self, MaybeUninit},
-    ops::{Deref, Range},
+    ops::Range,
     pin::Pin,
     ptr::NonNull,
     sync::atomic::AtomicPtr,
@@ -38,7 +38,7 @@ pub struct Kernel {
 
 impl Kernel {
     pub fn from_tasks(tasks: &[TaskDesc], idle_index: usize) -> Result<Self, KernelError> {
-        let mut tasks: heapless::Vec<_, 5> = tasks
+        let tasks: heapless::Vec<_, 5> = tasks
             .into_iter()
             .map(|desc| {
                 Task::new(
@@ -52,18 +52,6 @@ impl Kernel {
                 )
             })
             .collect();
-        // tasks.insert(
-        //     0,
-        //     Task::new(
-        //         0..0x400,
-        //         0..0x400,
-        //         100,
-        //         Vec::from_slice(&[0..200]).unwrap(),
-        //         Vec::default(),
-        //         unsafe { TaskPtr::from_raw_parts(1, ()) },
-        //         false,
-        //     ),
-        // );
         let kernel = Kernel::new(tasks, TaskRef(idle_index))?;
         Ok(kernel)
     }

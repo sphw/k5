@@ -1,4 +1,5 @@
 // from probe-run/src/elf.rs
+#![allow(dead_code)]
 use std::{collections::HashSet, convert::TryInto, env, ops::Deref};
 
 use color_eyre::{

@@ -47,6 +47,7 @@ pub struct FlashConfig {
     #[serde(default)]
     pub connect_under_reset: bool,
     #[structopt(long = "dry-run")]
+    #[serde(default)]
     pub dry_run: bool,
     #[structopt(
         long = "allow-erase-all",
@@ -83,17 +84,17 @@ impl FlashConfig {
     }
 }
 
-impl Into<ProbeOptions> for FlashConfig {
-    fn into(self) -> ProbeOptions {
+impl From<FlashConfig> for ProbeOptions {
+    fn from(val: FlashConfig) -> Self {
         ProbeOptions {
-            chip: self.chip,
-            chip_description_path: self.chip_description_path,
-            protocol: self.protocol,
-            probe_selector: self.probe_selector,
-            speed: self.speed,
-            connect_under_reset: self.connect_under_reset,
-            dry_run: self.dry_run,
-            allow_erase_all: self.allow_erase_all,
+            chip: val.chip,
+            chip_description_path: val.chip_description_path,
+            protocol: val.protocol,
+            probe_selector: val.probe_selector,
+            speed: val.speed,
+            connect_under_reset: val.connect_under_reset,
+            dry_run: val.dry_run,
+            allow_erase_all: val.allow_erase_all,
         }
     }
 }
