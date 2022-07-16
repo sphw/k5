@@ -6,10 +6,13 @@
 #![feature(strict_provenance)]
 #![feature(naked_functions)]
 
+extern crate alloc;
+
 pub mod arch;
 pub mod task_ptr;
 
-extern crate alloc;
+#[cfg(test)]
+mod tests;
 
 use abi::{
     Capability, CapabilityRef, Endpoint, SyscallArgs, SyscallDataType, SyscallIndex, SyscallReturn,
@@ -18,7 +21,7 @@ use abi::{
 use alloc::boxed::Box;
 use cordyceps::{
     list::{self, Links},
-    mpsc_queue, List, MpscQueue,
+    List,
 };
 use core::{
     mem::{self, MaybeUninit},
@@ -39,7 +42,7 @@ pub struct Kernel {
 impl Kernel {
     pub fn from_tasks(tasks: &[TaskDesc], idle_index: usize) -> Result<Self, KernelError> {
         let tasks: heapless::Vec<_, 5> = tasks
-            .into_iter()
+            .iter()
             .map(|desc| {
                 Task::new(
                     desc.flash_region.clone(),
@@ -62,13 +65,13 @@ impl Kernel {
             time: 20,
         };
         let tcbs = Vec::default();
-        let domains = MaybeUninit::<[MpscQueue<DomainEntry>; PRIORITY_COUNT]>::uninit();
-        let mut domains: [MaybeUninit<MpscQueue<DomainEntry>>; PRIORITY_COUNT] =
+        let domains = MaybeUninit::<[List<DomainEntry>; PRIORITY_COUNT]>::uninit();
+        let mut domains: [MaybeUninit<List<DomainEntry>>; PRIORITY_COUNT] =
             unsafe { mem::transmute(domains) };
         for d in &mut domains {
-            d.write(MpscQueue::new_with_stub(Box::pin(DomainEntry::default())));
+            d.write(List::new());
         }
-        let domains: [MpscQueue<DomainEntry>; PRIORITY_COUNT] = unsafe { mem::transmute(domains) };
+        let domains: [List<DomainEntry>; PRIORITY_COUNT] = unsafe { mem::transmute(domains) };
         let mut kernel = Kernel {
             scheduler: Scheduler {
                 tcbs,
@@ -124,15 +127,12 @@ impl Kernel {
     fn send_inner(
         &mut self,
         endpoint: Endpoint,
-        msg: Box<[u8]>,
+        body: Box<[u8]>,
         reply_thread: Option<ThreadRef>,
     ) -> Result<(), KernelError> {
         let dest_tcb = self.scheduler.get_tcb_mut(endpoint.tcb_ref)?;
-        dest_tcb.req_queue.enqueue(Box::pin(IPCMsg {
-            inner: Some(IPCMsgInner {
-                reply_thread,
-                body: unsafe { mem::transmute(msg) },
-            }),
+        dest_tcb.req_queue.push_back(Box::pin(IPCMsg {
+            inner: Some(IPCMsgInner { reply_thread, body }),
             ..Default::default()
         }));
 
@@ -149,7 +149,7 @@ impl Kernel {
                     .tasks
                     .get(dest_tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
-                assert!(dest_tcb.pop_msg(task, &mut buf)?);
+                assert!(dest_tcb.pop_msg(task, mask, &mut buf)?);
                 let dest_tcb_priority = dest_tcb.priority;
                 self.scheduler
                     .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
@@ -189,10 +189,10 @@ impl Kernel {
             .unwrap()
             .unwrap_or(self.scheduler.current_thread.tcb_ref);
         let tcb = self.scheduler.get_tcb(tcb_ref).unwrap();
-        arch::start_root_task(&tcb);
+        arch::start_root_task(tcb);
     }
 
-    pub fn syscall(
+    pub(crate) fn syscall(
         &mut self,
         index: abi::SyscallIndex,
         args: &SyscallArgs,
@@ -236,8 +236,8 @@ impl Kernel {
                     .tasks
                     .get(tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
-                let mask = index.get(SyscallIndex::CAPABILITY);
-                if !tcb.pop_msg(task, &mut out_buf)? {
+                let mask = index.get(SyscallIndex::CAPABILITY) as usize;
+                if !tcb.pop_msg(task, mask, &mut out_buf)? {
                     Ok((
                         Some(self.wait(mask as usize, out_buf)?),
                         SyscallReturn::new(),
@@ -260,7 +260,7 @@ impl Kernel {
                 buf[1] = log_buf.len() as u8;
                 // NOTE: this assumes that the internal task index is the same as codegen task index, which is true for embedded,
                 // but for systems with dynamic tasks is not true.
-                buf[2..log_buf.len() + 2].clone_from_slice(&log_buf);
+                buf[2..log_buf.len() + 2].clone_from_slice(log_buf);
                 unsafe { arch::log(&buf[..log_buf.len() + 2]) };
                 Ok((None, SyscallReturn::new()))
             }
@@ -310,7 +310,7 @@ impl Kernel {
 
 pub struct Scheduler {
     tcbs: Vec<TCB, 15>,
-    domains: [MpscQueue<DomainEntry>; PRIORITY_COUNT],
+    domains: [List<DomainEntry>; PRIORITY_COUNT],
     exhausted_threads: List<ExhaustedThread>,
     current_thread: ThreadTime,
 }
@@ -319,13 +319,13 @@ impl Scheduler {
     pub fn spawn(&mut self, tcb: TCB) -> Result<ThreadRef, KernelError> {
         let d = self
             .domains
-            .get(tcb.priority)
+            .get_mut(tcb.priority)
             .ok_or(KernelError::InvalidPriority)?;
         let tcb_ref = ThreadRef(self.tcbs.len());
         self.tcbs
             .push(tcb)
             .map_err(|_| KernelError::TooManyThreads)?;
-        d.enqueue(Box::pin(DomainEntry {
+        d.push_back(Box::pin(DomainEntry {
             tcb_ref: Some(tcb_ref),
             ..Default::default()
         }));
@@ -338,19 +338,19 @@ impl Scheduler {
             .rev()
             .take(PRIORITY_COUNT - 1 - current_priority)
         {
-            if let Some(thread) = domain.dequeue().and_then(|t| t.tcb_ref) {
+            if let Some(thread) = domain.pop_front().and_then(|t| t.tcb_ref) {
                 return Some(thread);
             }
         }
         None
     }
 
-    pub fn add_thread(&self, priority: usize, tcb_ref: ThreadRef) -> Result<(), KernelError> {
+    pub fn add_thread(&mut self, priority: usize, tcb_ref: ThreadRef) -> Result<(), KernelError> {
         let d = self
             .domains
-            .get(priority)
+            .get_mut(priority)
             .ok_or(KernelError::InvalidPriority)?;
-        d.enqueue(Box::pin(DomainEntry::new(tcb_ref)));
+        d.push_back(Box::pin(DomainEntry::new(tcb_ref)));
         Ok(())
     }
 
@@ -376,9 +376,9 @@ impl Scheduler {
                             .ok_or(KernelError::InvalidThreadRef)?;
                         let d = self
                             .domains
-                            .get(tcb.priority)
+                            .get_mut(tcb.priority)
                             .ok_or(KernelError::InvalidPriority)?;
-                        d.enqueue(Box::pin(DomainEntry::new(tcb_ref)));
+                        d.push_back(Box::pin(DomainEntry::new(tcb_ref)));
                     }
                 }
             }
@@ -513,8 +513,8 @@ pub struct TCB {
     saved_state: arch::SavedThreadState,
     //_pad: usize,
     task: TaskRef, // Maybe use RC for this
-    req_queue: MpscQueue<IPCMsg>,
-    reply_queue: MpscQueue<IPCMsg>,
+    req_queue: List<IPCMsg>,
+    //reply_queue: List<IPCMsg>,
     state: ThreadState,
     priority: usize,
     budget: usize,
@@ -525,6 +525,30 @@ pub struct TCB {
 }
 
 impl TCB {
+    pub fn new(
+        task: TaskRef,
+        stack_pointer: usize,
+        priority: usize,
+        budget: usize,
+        cooldown: usize,
+        entrypoint: usize,
+    ) -> Self {
+        Self {
+            task,
+            //_pad: 0,
+            req_queue: List::new(),
+            //reply_queue: List::new(),
+            state: ThreadState::Ready,
+            priority,
+            budget,
+            cooldown,
+            capabilities: Vec::default(),
+            stack_pointer,
+            entrypoint,
+            saved_state: Default::default(),
+        }
+    }
+
     fn endpoint(&self, cap_ref: CapabilityRef) -> Result<Endpoint, KernelError> {
         let dest_cap = self
             .capabilities
@@ -545,14 +569,25 @@ impl TCB {
     fn pop_msg(
         &mut self,
         task: &Task,
+        mask: usize,
         out_buf: &mut TaskPtrMut<'_, [u8]>,
     ) -> Result<bool, KernelError> {
-        // TODO(sphw): respect mask
-        let msg = if let Some(msg) = self.req_queue.dequeue() {
-            msg
-        } else {
+        let mut cursor = self.req_queue.cursor_front_mut();
+        cursor.move_prev();
+        let mut found = false;
+        while let Some(msg) = {
+            cursor.move_next();
+            cursor.current()
+        } {
+            if msg.addr & mask == mask {
+                found = true;
+                break;
+            }
+        }
+        if !found {
             return Ok(false);
-        };
+        }
+        let msg = cursor.remove_current().unwrap(); // found will only ever be set when there is a msg
         let out_buf = task
             .validate_mut_ptr(out_buf)
             .ok_or(KernelError::InvalidTaskPtr)?;
@@ -562,7 +597,7 @@ impl TCB {
                 .set_syscall_return(abi::Error::ReturnTypeMismatch.into());
             return Ok(true);
         }
-        out_buf.copy_from_slice(&body);
+        out_buf.copy_from_slice(body);
         self.saved_state.set_syscall_return(
             SyscallReturn::new().with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
         );
@@ -572,7 +607,7 @@ impl TCB {
 
 #[derive(Default)]
 pub struct DomainEntry {
-    links: mpsc_queue::Links<DomainEntry>,
+    links: list::Links<DomainEntry>,
     tcb_ref: Option<ThreadRef>,
 }
 
@@ -590,32 +625,6 @@ enum ThreadState {
     Waiting(usize, TaskPtrMut<'static, [u8]>),
     Ready,
     Running,
-}
-
-impl TCB {
-    pub fn new(
-        task: TaskRef,
-        stack_pointer: usize,
-        priority: usize,
-        budget: usize,
-        cooldown: usize,
-        entrypoint: usize,
-    ) -> Self {
-        Self {
-            task,
-            //_pad: 0,
-            req_queue: MpscQueue::new_with_stub(Box::pin(IPCMsg::default())),
-            reply_queue: MpscQueue::new_with_stub(Box::pin(IPCMsg::default())),
-            state: ThreadState::Ready,
-            priority,
-            budget,
-            cooldown,
-            capabilities: Vec::default(),
-            stack_pointer,
-            entrypoint,
-            saved_state: Default::default(),
-        }
-    }
 }
 
 #[repr(C)]
@@ -699,6 +708,7 @@ impl Task {
 #[derive(Default)]
 pub struct IPCMsg {
     links: list::Links<IPCMsg>,
+    addr: usize,
     inner: Option<IPCMsgInner>,
 }
 
@@ -710,7 +720,7 @@ pub struct IPCMsgInner {
 
 macro_rules! linked_impl {
     ($t: ty) => {
-        unsafe impl cordyceps::Linked<mpsc_queue::Links<$t>> for $t {
+        unsafe impl cordyceps::Linked<list::Links<$t>> for $t {
             type Handle = Pin<Box<Self>>;
 
             fn into_ptr(r: Self::Handle) -> core::ptr::NonNull<Self> {
@@ -723,7 +733,7 @@ macro_rules! linked_impl {
 
             unsafe fn links(
                 target: core::ptr::NonNull<Self>,
-            ) -> core::ptr::NonNull<mpsc_queue::Links<Self>> {
+            ) -> core::ptr::NonNull<list::Links<Self>> {
                 target.cast()
             }
         }
@@ -741,6 +751,3 @@ pub struct TaskDesc {
     pub flash_region: Range<usize>,
     pub ram_region: Range<usize>,
 }
-
-#[cfg(test)]
-mod tests;
