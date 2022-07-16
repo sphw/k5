@@ -15,8 +15,8 @@ pub mod task_ptr;
 mod tests;
 
 use abi::{
-    Capability, CapabilityRef, Endpoint, SyscallArgs, SyscallDataType, SyscallIndex, SyscallReturn,
-    SyscallReturnType, ThreadRef,
+    CapListEntry, Capability, CapabilityRef, Endpoint, SyscallArgs, SyscallDataType, SyscallIndex,
+    SyscallReturn, SyscallReturnType, ThreadRef,
 };
 use alloc::boxed::Box;
 use cordyceps::{
@@ -128,11 +128,14 @@ impl Kernel {
         &mut self,
         endpoint: Endpoint,
         body: Box<[u8]>,
-        reply_thread: Option<ThreadRef>,
+        reply_endpoint: Option<Endpoint>,
     ) -> Result<(), KernelError> {
         let dest_tcb = self.scheduler.get_tcb_mut(endpoint.tcb_ref)?;
         dest_tcb.req_queue.push_back(Box::pin(IPCMsg {
-            inner: Some(IPCMsgInner { reply_thread, body }),
+            inner: Some(IPCMsgInner {
+                reply_endpoint,
+                body,
+            }),
             ..Default::default()
         }));
 
@@ -168,7 +171,11 @@ impl Kernel {
     ) -> Result<ThreadRef, KernelError> {
         let src_ref = self.scheduler.current_thread.tcb_ref;
         let endpoint = self.scheduler.current_thread()?.endpoint(dest)?;
-        self.send_inner(endpoint, msg, Some(src_ref))?;
+        let reply_endpoint = Endpoint {
+            tcb_ref: src_ref,
+            addr: endpoint.addr | 0x80000000,
+        };
+        self.send_inner(endpoint, msg, Some(reply_endpoint))?;
         self.wait(endpoint.addr | 0x80000000, out_buf) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
     }
 
@@ -211,8 +218,7 @@ impl Kernel {
                     Err(e) => return Err(e),
                 };
                 let msg = Box::from(slice);
-                let cap = index.get(SyscallIndex::CAPABILITY);
-                let cap = CapabilityRef(cap as usize);
+                let cap = CapabilityRef(args.arg3);
                 let priority = tcb.priority;
                 self.send(cap, msg)?;
                 if let Some(thread) = self.scheduler.next_thread(priority) {
@@ -236,7 +242,7 @@ impl Kernel {
                     .tasks
                     .get(tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
-                let mask = index.get(SyscallIndex::CAPABILITY) as usize;
+                let mask = args.arg3;
                 if !tcb.pop_msg(task, mask, &mut out_buf)? {
                     Ok((
                         Some(self.wait(mask as usize, out_buf)?),
@@ -270,12 +276,17 @@ impl Kernel {
                 let tcb = self.scheduler.current_thread()?;
                 let slice = unsafe {
                     core::slice::from_raw_parts_mut(
-                        args.arg1 as *mut Capability,
+                        args.arg1 as *mut CapListEntry,
                         args.arg2 as usize,
                     )
                 };
                 let len = slice.len().min(tcb.capabilities.len());
-                slice[0..len].clone_from_slice(&tcb.capabilities[..len]); // TODO: code this defensivly
+                for (i, entry) in tcb.capabilities.iter().take(len).enumerate() {
+                    slice[i] = abi::CapListEntry {
+                        cap_ref: CapabilityRef((entry as *const CapEntry).addr()),
+                        desc: entry.cap.clone(),
+                    };
+                }
                 let ret = SyscallReturn::new()
                     .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy)
                     .with(SyscallReturn::SYSCALL_LEN, len as u64);
@@ -519,7 +530,7 @@ pub struct TCB {
     priority: usize,
     budget: usize,
     cooldown: usize,
-    capabilities: Vec<Capability, 10>,
+    capabilities: List<CapEntry>,
     stack_pointer: usize,
     entrypoint: usize,
 }
@@ -542,18 +553,25 @@ impl TCB {
             priority,
             budget,
             cooldown,
-            capabilities: Vec::default(),
+            capabilities: List::new(),
             stack_pointer,
             entrypoint,
             saved_state: Default::default(),
         }
     }
 
+    fn capability(&self, cap_ref: CapabilityRef) -> Result<&Capability, KernelError> {
+        for c in self.capabilities.iter() {
+            let c_addr = (c as *const CapEntry).addr();
+            if c_addr == *cap_ref {
+                return Ok(&c.cap);
+            }
+        }
+        Err(KernelError::InvalidCapabilityRef)
+    }
+
     fn endpoint(&self, cap_ref: CapabilityRef) -> Result<Endpoint, KernelError> {
-        let dest_cap = self
-            .capabilities
-            .get(*cap_ref)
-            .ok_or(KernelError::InvalidCapabilityRef)?;
+        let dest_cap = self.capability(cap_ref)?;
         let endpoint = if let Capability::Endpoint(endpoint) = dest_cap {
             endpoint
         } else {
@@ -562,8 +580,11 @@ impl TCB {
         Ok(*endpoint)
     }
 
-    pub fn add_cap(&mut self, capability: Capability) {
-        let _ = self.capabilities.push(capability);
+    pub fn add_cap(&mut self, cap: Capability) {
+        let _ = self.capabilities.push_back(Box::pin(CapEntry {
+            links: Links::default(),
+            cap,
+        }));
     }
 
     fn pop_msg(
@@ -705,6 +726,11 @@ impl Task {
     }
 }
 
+struct CapEntry {
+    links: list::Links<CapEntry>,
+    cap: Capability,
+}
+
 #[derive(Default)]
 pub struct IPCMsg {
     links: list::Links<IPCMsg>,
@@ -714,7 +740,7 @@ pub struct IPCMsg {
 
 #[repr(C)]
 pub struct IPCMsgInner {
-    reply_thread: Option<ThreadRef>,
+    reply_endpoint: Option<Endpoint>,
     body: Box<[u8]>,
 }
 
@@ -742,6 +768,7 @@ macro_rules! linked_impl {
 
 linked_impl! {IPCMsg }
 linked_impl! { DomainEntry }
+linked_impl! { CapEntry }
 
 pub struct TaskDesc {
     pub name: &'static str,

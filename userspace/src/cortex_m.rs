@@ -5,8 +5,8 @@ use core::{
 };
 
 use abi::{
-    Capability, CapabilityRef, Error, SyscallArgs, SyscallDataType, SyscallFn, SyscallIndex,
-    SyscallReturn, SyscallReturnType,
+    CapListEntry, Capability, CapabilityRef, Error, SyscallArgs, SyscallDataType, SyscallFn,
+    SyscallIndex, SyscallReturn, SyscallReturnType,
 };
 
 #[doc(hidden)]
@@ -91,11 +91,11 @@ fn send<T: ?Sized>(ty: SyscallDataType, capability: CapabilityRef, r: &mut T) ->
     let addr = ptr.addr();
     let index = SyscallIndex::new()
         .with(SyscallIndex::SYSCALL_ARG_TYPE, ty)
-        .with(SyscallIndex::SYSCALL_FN, SyscallFn::Send)
-        .with(SyscallIndex::CAPABILITY, *capability as u32);
+        .with(SyscallIndex::SYSCALL_FN, SyscallFn::Send);
     let mut args = SyscallArgs {
         arg1: addr,
         arg2: size,
+        arg3: *capability,
         ..Default::default()
     };
     let res = unsafe { syscall(index, &mut args) };
@@ -149,11 +149,11 @@ pub fn recv<T: ?Sized>(addr: u32, r: &mut T) -> Result<(), Error> {
     let (ptr, _) = (r as *mut T).to_raw_parts();
     let index = SyscallIndex::new()
         .with(SyscallIndex::SYSCALL_ARG_TYPE, SyscallDataType::Copy)
-        .with(SyscallIndex::SYSCALL_FN, SyscallFn::Recv)
-        .with(SyscallIndex::CAPABILITY, addr);
+        .with(SyscallIndex::SYSCALL_FN, SyscallFn::Recv);
     let mut args = SyscallArgs {
         arg1: ptr.addr(),
         arg2: size,
+        arg3: addr as usize,
         ..Default::default()
     };
     let res = unsafe { syscall(index, &mut args) };
@@ -190,12 +190,11 @@ impl<T> DerefMut for LoanedPage<T> {
 }
 
 pub fn get_caps() -> Result<CapList, Error> {
-    const ELEM: MaybeUninit<Capability> = MaybeUninit::uninit();
+    const ELEM: MaybeUninit<CapListEntry> = MaybeUninit::uninit();
 
     let index = SyscallIndex::new()
         .with(SyscallIndex::SYSCALL_ARG_TYPE, SyscallDataType::Short)
-        .with(SyscallIndex::SYSCALL_FN, SyscallFn::Caps)
-        .with(SyscallIndex::CAPABILITY, 0);
+        .with(SyscallIndex::SYSCALL_FN, SyscallFn::Caps);
     let mut buf = [ELEM; 10];
     let ptr = buf.as_mut_ptr();
     let mut args = SyscallArgs {
@@ -218,12 +217,12 @@ pub fn get_caps() -> Result<CapList, Error> {
 }
 
 pub struct CapList {
-    buf: [MaybeUninit<Capability>; 10],
+    buf: [MaybeUninit<abi::CapListEntry>; 10],
     len: usize,
 }
 
 impl Deref for CapList {
-    type Target = [Capability];
+    type Target = [abi::CapListEntry];
 
     fn deref(&self) -> &Self::Target {
         // Safety:

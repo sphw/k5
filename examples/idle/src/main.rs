@@ -16,7 +16,7 @@ pub fn main() -> ! {
             let mut buf = [0xFFu8; 10];
             buf[0] = a as u8;
             println!("send {:?}", buf);
-            userspace::send_copy(0.into(), &mut buf);
+            userspace::send_copy(caps[0].cap_ref, &mut buf);
         }
     }
 }

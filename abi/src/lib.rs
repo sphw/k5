@@ -2,6 +2,7 @@
 
 use core::ops::Deref;
 
+use defmt::Format;
 use mycelium_bitfield::FromBits;
 
 mycelium_bitfield::bitfield! {
@@ -9,7 +10,6 @@ mycelium_bitfield::bitfield! {
     pub struct SyscallIndex<u32> {
         pub const SYSCALL_FN: SyscallFn;
         pub const SYSCALL_ARG_TYPE: SyscallDataType;
-        pub const CAPABILITY = 8;
     }
 }
 
@@ -90,10 +90,11 @@ pub enum SyscallReturnType {
 }
 
 mycelium_bitfield::bitfield! {
-    #[derive( Eq, PartialEq)] // ...and attributes
+    #[derive( Eq, PartialEq)]
     pub struct SyscallReturn<u64> {
         pub const SYSCALL_TYPE: SyscallReturnType;
-        pub const SYSCALL_LEN = 30;
+        pub const SYSCALL_CAP = 8;
+        pub const SYSCALL_LEN = 22;
         pub const SYSCALL_PTR = 32;
     }
 }
@@ -209,6 +210,12 @@ impl ThreadRef {
     pub const fn idle() -> ThreadRef {
         ThreadRef(0)
     }
+}
+
+#[derive(Format)]
+pub struct CapListEntry {
+    pub cap_ref: CapabilityRef,
+    pub desc: Capability,
 }
 
 // LOGING
