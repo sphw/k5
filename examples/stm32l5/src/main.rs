@@ -21,8 +21,8 @@ fn main() -> ! {
     {
         use core::mem::MaybeUninit;
         const HEAP_SIZE: usize = 0x1000;
-        static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-        unsafe { crate::ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP_SIZE) }
+        static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
+        unsafe { crate::ALLOCATOR.init(HEAP.as_mut_ptr(), HEAP_SIZE) }
     }
     let kernel =
         unsafe { kernel::arch::init_kernel(task_table::TASKS, task_table::TASK_IDLE_INDEX) };

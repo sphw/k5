@@ -6,7 +6,7 @@ name = "stm32u5"
 version = "0.1.0"
 
 [dependencies]
-alloc-cortex-m = { git = "https://github.com/sphw/alloc-cortex-m.git", branch = "m10" }
+alloc-cortex-m = { git = "https://github.com/sphw/alloc-cortex-m.git", branch = "version-bumps" }
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 kernel = { path = "../../kernel" }
