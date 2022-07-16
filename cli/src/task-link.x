@@ -1,3 +1,5 @@
+/* Linker script for a temporary link operation, used to measure task size
+ * (but without flash fill) */
 INCLUDE memory.x
 
 ENTRY(_start);
@@ -27,16 +29,6 @@ SECTIONS
     __erodata = .;
   } > FLASH
 
-  /*
-   * Table of entry points for Hubris to get into the bootloader.
-   * table.ld containing the actual bytes is generated at runtime.
-   * Note the ALIGN requirement comes from TrustZone requirements.
-   */
-  /* .addr_table : ALIGN(32) { */
-  /*   __bootloader_fn_table = .; */
-  /*   INCLUDE table.ld */
-  /*   __end_flash = .; */
-  /* } > FLASH */
 
   /*
    * Sections in RAM
@@ -51,13 +43,6 @@ SECTIONS
     . = ALIGN(4); /* 4-byte align the end (VMA) of this section */
     __edata = .;
   } > RAM AT>FLASH
-
-  /*
-   * Fill the remaining flash space with a known value
-   */
-  .fill (LOADADDR(.data) + SIZEOF(.data)) : AT(LOADADDR(.data) +  SIZEOF(.data)) {
-    . = ORIGIN(FLASH) + LENGTH(FLASH);
-  } > FLASH =0xffffffff
 
   /* LMA of .data */
   __sidata = LOADADDR(.data);
@@ -86,20 +71,6 @@ SECTIONS
   .got (NOLOAD) :
   {
     KEEP(*(.got .got.*));
-  }
-
-  /* ## .task_slot_table */
-  /* Table of TaskSlot instances and their names. Used to resolve task
-     dependencies during packaging. */
-  .task_slot_table (INFO) : {
-    . = .;
-    KEEP(*(.task_slot_table));
-  }
-
-  /* ## .idolatry */
-  .idolatry (INFO) : {
-    . = .;
-    KEEP(*(.idolatry));
   }
 
   /* ## Discarded sections */

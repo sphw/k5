@@ -26,7 +26,6 @@ use std::{
 use crate::flash;
 
 static TASK_RLINK_BYTES: &[u8] = include_bytes!("task-rlink.x");
-static TASK_TLINK_BYTES: &[u8] = include_bytes!("task-tlink.x");
 static TASK_LINK_BYTES: &[u8] = include_bytes!("task-link.x");
 static KERN_LINK_BYTES: &[u8] = include_bytes!("kern-link.x");
 
@@ -129,7 +128,7 @@ impl Config {
             .zip(self.tasks.iter())
             .map(|(reloc, task)| {
                 let elf = &task.target_dir().join("size.elf");
-                task.link(reloc, elf, &full_size_loc, TASK_TLINK_BYTES)?;
+                task.link(reloc, elf, &full_size_loc, TASK_LINK_BYTES)?;
                 let size = get_elf_size(elf, &self.flash, &self.ram, task.stack_space_size)?;
                 let entry = TaskTableEntry {
                     task,

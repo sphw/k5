@@ -26,17 +26,6 @@ SECTIONS
   }
 
   /*
-   * Table of entry points for Hubris to get into the bootloader.
-   * table.ld containing the actual bytes is generated at runtime.
-   * Note the ALIGN requirement comes from TrustZone requirements.
-   */
-  /* .addr_table : ALIGN(32) { */
-  /*   __bootloader_fn_table = .; */
-  /*   INCLUDE table.ld */
-  /*   __end_flash = .; */
-  /* } */
-
-  /*
    * Sections in RAM
    *
    * NOTE: the userlib runtime assumes that these sections
@@ -71,20 +60,6 @@ SECTIONS
      the input files and raise an error if relocatable code is found */
   .got (NOLOAD) : {
     KEEP(*(.got .got.*));
-  }
-
-  /* ## .task_slot_table */
-  /* Table of TaskSlot instances and their names. Used to resolve task
-     dependencies during packaging. */
-  .task_slot_table (INFO) : {
-    . = .;
-    KEEP(*(.task_slot_table));
-  }
-
-  /* ## .idolatry */
-  .idolatry (INFO) : {
-    . = .;
-    KEEP(*(.idolatry));
   }
 
   /* ## Discarded sections */

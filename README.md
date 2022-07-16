@@ -13,11 +13,26 @@ Let's start with the good. The largest reason is that this is a capability based
 Now lets discuss the "bad" reasons. I've always been fascinated by kernel development, and have long wanted to try it out for myself. Of course I could have just contributed to an existing kernel, but that wouldn't be as fun. 
 
 ## What
-Right now there is some basic functionality mainly for Cortex-M.
+Right now there is some basic functionality mainly for ARMv8M. There is an example project for the STM32L5, though it *should* work on any v8m CPU with a little modification. You can send and recieve messages between threads, the scheduler will pre-empt your tasks at set intervels, and there is a built in logging framework using defmt.
+
+## What's Next
+
+I've got plans! So so many plans... Basically I think the order of tasks will be as follows
+- [ ] Finish the initial set of syscalls (recv, call, send, logs, caps)
+- [ ] Write MPU region solver and add MPU support for Cortex-M
+- [ ] Make the UX better for the kernels APIs. Basically make starting the kernel and threads easier.
+- [ ] Document both the code, and the design choices of the project
+- [ ] Attempt to use Kani or Creusot to verify the base scheduler
+- [ ] Port to RISC-V ?
+- [ ] Add support for building and using TZ / PMP enclave tasks
+- [ ] Investiage porting to MMU based systems
+
+The order is subject to change based on what I feel like is the shiniest object, but that's the basic roadmap. If any of those things sound interesting to you and you want to help out, please reach out.
+
 
 ## Name
 
 Ok, so to be honest the name was a happy-ish accident. I needed a random name, and I knew I was building an L4 kernel. So a number and letter sounded nice together. But I now have two nice stories to backup the name. The first is that much like k8s or i18n, the 5 is a stand in for the rest of the word "kernel". Also, mountains in the Karakoram region of a few countries (I'm not here to create geopolitical conflict), are surveyed starting with K. K5 is Gasherbrum 1, which serves as the inspiration for the logo.
 
 ## Credits
-This projects owes a lot to seL4 and Hubris OS, both fantastic kernels and resources. The context-switching, syscall code, and build system are heavily inspired by Hubris. The scheduler and IPC system are heavily based on seL4.
+This projects owes a lot to seL4 and Hubris OS, both fantastic kernels and resources. The context-switching, syscall code, and build system are heavily inspired by Hubris. The scheduler and IPC system are heavily based on seL4. The logging system is just straight up defmt, but the RTT block is accessed through the kernel. Huge thanks to the Ferrous systems and the rest of the Rust embedded community, who have helped make embedded development far friendly to work with. 
