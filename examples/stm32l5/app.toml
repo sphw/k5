@@ -1,0 +1,32 @@
+flash = { address = 0x08000000, size = 0x10000 }
+ram  = { address = 0x20000000, size = 0x40000 }
+stack_space_size = 0x2000
+stack_size = 0x1000
+
+[probe]
+chip = "STM32L562QEIxQ"
+
+[kernel]
+crate_path = "./"
+ram_size   = 0x20000
+stack_size = 0x00004
+flash_size = 0x30000
+
+[[tasks]]
+name = "idle"
+crate_path = "../idle"
+secure = false
+root = false
+
+[[tasks]]
+name = "foo"
+crate_path = "../foo"
+secure = false
+root = false
+
+
+# [[tasks]]
+# name = "bar"
+# crate_path = "../bar"
+# secure = false
+# root = false
