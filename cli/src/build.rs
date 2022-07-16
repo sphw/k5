@@ -12,6 +12,7 @@
 ///! RISC-V and ARM-V7M are next on the docket.
 use cargo_metadata::Message;
 use color_eyre::{eyre::anyhow, Result};
+use colored::Colorize;
 use goblin::{elf64::program_header::PT_LOAD, Object};
 use serde::Deserialize;
 use std::{
@@ -89,12 +90,10 @@ impl Config {
                     .ok_or_else(|| anyhow!("missing default stack size"))?;
             }
             if task.stack_space_size == 0 {
-                println!("setting stack space {:?}", self.stack_space_size);
                 task.stack_space_size = self
                     .stack_space_size
                     .ok_or_else(|| anyhow!("missing default stack space size"))?;
             }
-            println!("{:?}", task);
             match task.source {
                 TaskSource::Crate { ref mut crate_path } => {
                     if crate_path.is_relative() {
@@ -132,7 +131,6 @@ impl Config {
                 let elf = &task.target_dir().join("size.elf");
                 task.link(reloc, elf, &full_size_loc, TASK_TLINK_BYTES)?;
                 let size = get_elf_size(elf, &self.flash, &self.ram, task.stack_space_size)?;
-                println!("task {:?} size: {:?}", task.name, size);
                 let entry = TaskTableEntry {
                     task,
                     loc: TaskLoc {
@@ -155,7 +153,6 @@ impl Config {
             .iter()
             .zip(task_table.iter())
             .map(|(reloc, entry)| {
-                println!("linking final: {:?}", entry.task.name);
                 let elf = entry.task.target_dir().join("final.elf");
                 entry.task.link(reloc, &elf, &entry.loc, TASK_LINK_BYTES)?;
                 Ok(elf)
@@ -167,7 +164,6 @@ impl Config {
             .zip(task_table.iter())
             .map(|(elf, entry)| {
                 let TaskTableEntry { task, loc } = entry;
-                println!("writing task: {:?} {:?}", task.name, elf);
                 let entrypoint = output.write(elf)?;
                 Ok(codegen::Task {
                     name: task.name.clone(),
@@ -211,6 +207,7 @@ impl Config {
 
 impl Kernel {
     fn build(&self, flash: u32, ram: u32, tasks: Vec<codegen::Task>) -> Result<PathBuf> {
+        println!("{}", "Building kernel".bold().green());
         let target_dir = self.crate_path.join("target");
         fs::create_dir_all(&target_dir)?;
         let kern_loc = TaskLoc {
@@ -296,6 +293,7 @@ impl Task {
     }
 
     fn build(&self) -> Result<PathBuf> {
+        println!("{}", format!("Building {}", self.name).bold().green());
         let TaskSource::Crate { crate_path } = &self.source;
 
         let target_dir = crate_path.join("target");
@@ -399,7 +397,6 @@ struct TaskLoc {
 
 impl TaskLoc {
     fn memory_linker_script(&self, stack_size: u32) -> String {
-        println!("gen memory linker {:?} {:?}", self, stack_size);
         let ram_start = self.ram.address + stack_size;
         let ram_size = self.ram.size - stack_size;
         format!(

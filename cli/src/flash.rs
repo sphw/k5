@@ -5,6 +5,7 @@ use std::{
 };
 
 use color_eyre::Result;
+use colored::Colorize;
 use kdam::{tqdm, Column, RichProgress};
 use probe_rs::{
     flashing::{DownloadOptions, FlashProgress, ProgressEvent},
@@ -100,6 +101,7 @@ impl From<FlashConfig> for ProbeOptions {
 }
 
 pub fn flash(config: FlashConfig, ihex: PathBuf) -> Result<Session> {
+    println!("{}", "Flashing".bold().green());
     let config: ProbeOptions = config.into();
     let mut session = config.simple_attach()?;
     let mut bin = fs::File::open(ihex)?;
