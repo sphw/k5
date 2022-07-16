@@ -187,14 +187,15 @@ impl Kernel {
                     core::slice::from_raw_parts(args.arg1 as *const u8, args.arg2 as usize)
                 };
                 let mut buf = [0; 1024];
-                if slice.len() >= 1024 {
+                if slice.len() >= 1023 {
                     return Ok((None, SyscallReturn::new())); //TODO(sphw): use proper error
                 }
                 buf[0] = tcb.task.0 as u8;
+                buf[1] = slice.len() as u8;
                 // NOTE: this assumes that the internal task index is the same as codegen task index, which is true for embedded,
                 // but for systems with dynamic tasks is not true.
-                buf[1..slice.len() + 1].clone_from_slice(&slice);
-                unsafe { arch::log(&buf[..slice.len() + 1]) };
+                buf[2..slice.len() + 2].clone_from_slice(&slice);
+                unsafe { arch::log(&buf[..slice.len() + 2]) };
                 Ok((None, SyscallReturn::new()))
             }
             abi::SyscallFn::Caps => {

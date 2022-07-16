@@ -78,26 +78,34 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
     loop {
         let len = rtt.read(&mut core, &mut read_buf)?;
         if len != 0 {
-            let task_id = read_buf[0] as usize;
-            let decoder = &mut task_decoders[task_id];
-            let elf = &task_elfs[task_id];
-            decoder.received(&read_buf[1..len]);
-            loop {
-                match decoder.decode() {
-                    Ok(frame) => {
-                        println!("{}", frame.display_message());
-                        if let Some(locs) = &elf.defmt_locations {
-                            let (path, line, module) = location_info(&frame, locs, &current_dir);
-                            print_location(&path, line, &module)?;
+            let mut current_pos = 0;
+            let mut chunk_len = read_buf[current_pos + 1] as usize;
+            while len >= (chunk_len + current_pos + 2) {
+                let task_id = read_buf[current_pos] as usize;
+                let elf = &task_elfs[task_id];
+                let decoder = &mut task_decoders[task_id];
+                let buf = &read_buf[current_pos + 2..chunk_len + current_pos + 2];
+                decoder.received(buf);
+                loop {
+                    match decoder.decode() {
+                        Ok(frame) => {
+                            println!("{}", frame.display_message());
+                            if let Some(locs) = &elf.defmt_locations {
+                                let (path, line, module) =
+                                    location_info(&frame, locs, &current_dir);
+                                print_location(&path, line, &module)?;
+                            }
+                        }
+                        Err(DecodeError::UnexpectedEof) => {
+                            break;
+                        }
+                        Err(DecodeError::Malformed) => {
+                            break;
                         }
                     }
-                    Err(DecodeError::UnexpectedEof) => {
-                        break;
-                    }
-                    Err(DecodeError::Malformed) => {
-                        continue;
-                    }
                 }
+                current_pos += chunk_len + 1;
+                chunk_len = read_buf[current_pos + 1] as usize;
             }
         }
         let is_halted = core.core_halted()?;
