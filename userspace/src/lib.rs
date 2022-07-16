@@ -4,6 +4,7 @@
 #![feature(ptr_metadata)]
 #![feature(asm_sym)]
 mod cortex_m;
+pub use abi;
 pub use cortex_m::*;
 
 mod defmt;

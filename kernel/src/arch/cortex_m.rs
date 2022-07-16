@@ -4,7 +4,6 @@ use core::{
     sync::atomic::{AtomicPtr, Ordering},
 };
 use cortex_m::peripheral::scb::SystemHandler;
-use cortex_m::peripheral::NVIC;
 use mem::MaybeUninit;
 
 use abi::{SyscallArgs, SyscallIndex, SyscallReturn};
@@ -63,21 +62,10 @@ pub fn start_root_task(task: &TCB) -> ! {
         }
     }
 
-    // p.SYST.set_reload(400_000);
-    // p.SYST.clear_current();
-    // p.SYST.enable_counter();
-    // p.SYST.enable_interrupt();
-    // assert!(p.SYST.is_interrupt_enabled());
-    // assert!(p.SYST.is_counter_enabled());
-    unsafe {
-        let syst = &*cortex_m::peripheral::SYST::PTR;
-        // set the number of ticks per interrupt
-        syst.rvr.write(400_000);
-        // clear counter
-        syst.cvr.write(0);
-        // enable counter and interrupt
-        syst.csr.modify(|v| v | 0b111);
-    }
+    p.SYST.set_reload(400_000);
+    p.SYST.clear_current();
+    p.SYST.enable_counter();
+    p.SYST.enable_interrupt();
 
     unsafe {
         cortex_m::register::psp::write(task.saved_state.psp as u32);
@@ -90,12 +78,10 @@ pub fn start_root_task(task: &TCB) -> ! {
     // count (and branching) of the syscall handler. This is what FreeRTOS and Hubris both do
     // though, but I'd love to change it.
     unsafe {
-        asm!(
-            "
+        asm!("
             ldm {state}, {{r4-r11}}
             svc #0xFF
-            ",
-            state = in(reg) &task.saved_state.r4,
+            ", state = in(reg) &task.saved_state.r4,
             options(noreturn)
         )
     }
@@ -158,6 +144,13 @@ impl SavedThreadState {
         // Safety: repr(c) guarentees the order of fields, we are taking the first
         // 6 fields as SyscallArgs
         unsafe { mem::transmute(self) }
+    }
+
+    pub fn set_syscall_return(&mut self, ret: SyscallReturn) {
+        let args = self.syscall_args_mut();
+        let (a1, a2) = ret.split();
+        args.arg1 = a2 as usize;
+        args.arg2 = a1 as usize;
     }
 }
 
@@ -263,18 +256,24 @@ fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
     };
     let kernel = unsafe { &mut *kernel() };
     let (next_tcb, ret) = kernel.syscall(index, args).unwrap();
-    let args = unsafe {
-        let tcb = &mut *CURRENT_TCB.load(Ordering::SeqCst);
-        tcb.saved_state.syscall_args_mut()
-    };
-    let (a1, a2) = ret.split();
-    args.arg1 = a2 as usize;
-    args.arg2 = a1 as usize;
+    let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
+    tcb.saved_state.set_syscall_return(ret);
+
     if let Some(tcb_ref) = next_tcb {
         unsafe { set_current_tcb(kernel.scheduler.get_tcb(tcb_ref).unwrap()) }
     }
     ret
 }
+
+// pub fn set_return(ret: SyscallReturn) {
+//     let args = unsafe {
+//         let tcb = &mut *CURRENT_TCB.load(Ordering::SeqCst);
+//         tcb.saved_state.syscall_args_mut()
+//     };
+//     let (a1, a2) = ret.split();
+//     args.arg1 = a2 as usize;
+//     args.arg2 = a1 as usize;
+// }
 
 // RTT
 

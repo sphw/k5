@@ -1,4 +1,8 @@
-use core::{arch::asm, mem::MaybeUninit, ops::Deref};
+use core::{
+    arch::asm,
+    mem::MaybeUninit,
+    ops::{Deref, DerefMut},
+};
 
 use abi::{
     Capability, CapabilityRef, Error, SyscallArgs, SyscallDataType, SyscallFn, SyscallIndex,
@@ -137,8 +141,57 @@ pub fn send_copy<T: ?Sized>(capability: CapabilityRef, r: &mut T) -> Result<(), 
     send(SyscallDataType::Copy, capability, r)
 }
 
+pub fn recv_page<T: ?Sized>(addr: u32) -> LoanedPage<T> {
+    todo!()
+}
+pub fn recv<T: ?Sized>(addr: u32, r: &mut T) -> Result<(), Error> {
+    let size = core::mem::size_of_val(r);
+    let (ptr, _) = (r as *mut T).to_raw_parts();
+    let index = SyscallIndex::new()
+        .with(SyscallIndex::SYSCALL_ARG_TYPE, SyscallDataType::Copy)
+        .with(SyscallIndex::SYSCALL_FN, SyscallFn::Recv)
+        .with(SyscallIndex::CAPABILITY, addr);
+    let mut args = SyscallArgs {
+        arg1: ptr.addr(),
+        arg2: size,
+        ..Default::default()
+    };
+    let res = unsafe { syscall(index, &mut args) };
+    match res.get(SyscallReturn::SYSCALL_TYPE) {
+        SyscallReturnType::Error => {
+            let code = res.get(SyscallReturn::SYSCALL_LEN);
+            Err(abi::Error::from(code as u8))
+        }
+        SyscallReturnType::Page => Err(abi::Error::ReturnTypeMismatch),
+        _ => Ok(()),
+    }
+}
+
+pub struct LoanedPage<T: ?Sized> {
+    ptr: *mut T,
+}
+
+impl<T> Deref for LoanedPage<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        // Safety: the kernel guarentees that no other thread will touch this memory,
+        // so we can safely borrow it
+        unsafe { &*self.ptr }
+    }
+}
+
+impl<T> DerefMut for LoanedPage<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // Safety: the kernel guarentees that no other thread will touch this memory,
+        // so we can safely borrow it
+        unsafe { &mut *self.ptr }
+    }
+}
+
 pub fn get_caps() -> Result<CapList, Error> {
     const ELEM: MaybeUninit<Capability> = MaybeUninit::uninit();
+
     let index = SyscallIndex::new()
         .with(SyscallIndex::SYSCALL_ARG_TYPE, SyscallDataType::Short)
         .with(SyscallIndex::SYSCALL_FN, SyscallFn::Caps)

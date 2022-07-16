@@ -20,6 +20,7 @@ impl<'a, T: Pointee + ?Sized> TaskPtr<'a, T> {
     }
 }
 
+#[derive(Debug)]
 pub struct TaskPtrMut<'a, T: ?Sized> {
     ptr: &'a mut T,
 }

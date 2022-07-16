@@ -44,7 +44,7 @@ impl FromBits<u32> for SyscallFn {
 }
 
 #[repr(u8)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SyscallDataType {
     Short,
     Copy,
@@ -139,6 +139,15 @@ impl From<u8> for Error {
     }
 }
 
+impl From<Error> for u8 {
+    fn from(err: Error) -> Self {
+        match err {
+            Error::ReturnTypeMismatch => 1,
+            Error::Unknown(code) => code,
+        }
+    }
+}
+
 #[derive(Clone, Copy, defmt::Format)]
 pub struct CapabilityRef(pub usize);
 impl Deref for CapabilityRef {
@@ -146,6 +155,12 @@ impl Deref for CapabilityRef {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl From<usize> for CapabilityRef {
+    fn from(i: usize) -> Self {
+        CapabilityRef(i)
     }
 }
 

@@ -12,7 +12,8 @@ pub mod task_ptr;
 extern crate alloc;
 
 use abi::{
-    Capability, CapabilityRef, Endpoint, SyscallArgs, SyscallReturn, SyscallReturnType, ThreadRef,
+    Capability, CapabilityRef, Endpoint, SyscallArgs, SyscallDataType, SyscallIndex, SyscallReturn,
+    SyscallReturnType, ThreadRef,
 };
 use alloc::boxed::Box;
 use cordyceps::{
@@ -116,15 +117,15 @@ impl Kernel {
 
     /// Sends a message from the current thread to the specified endpoint
     /// This function takes a [`CapabilityRef`] and expects it to be an [`Endpoint`]
-    pub fn send<T>(&mut self, dest: CapabilityRef, msg: &T) -> Result<(), KernelError> {
+    pub fn send(&mut self, dest: CapabilityRef, msg: Box<[u8]>) -> Result<(), KernelError> {
         let endpoint = self.scheduler.current_thread()?.endpoint(dest)?;
         self.send_inner(endpoint, msg, None)
     }
 
-    fn send_inner<T>(
+    fn send_inner(
         &mut self,
         endpoint: Endpoint,
-        msg: &T,
+        msg: Box<[u8]>,
         reply_thread: Option<ThreadRef>,
     ) -> Result<(), KernelError> {
         let dest_tcb = self.scheduler.get_tcb_mut(endpoint.tcb_ref)?;
@@ -132,13 +133,24 @@ impl Kernel {
             inner: Some(IPCMsgInner {
                 reply_thread,
                 body: unsafe { mem::transmute(msg) },
-                len: mem::size_of_val(msg),
             }),
             ..Default::default()
         }));
-        if let ThreadState::Waiting(mask) = dest_tcb.state {
+
+        if let ThreadState::Waiting(mask, _) = dest_tcb.state {
             if mask & endpoint.addr == endpoint.addr {
-                dest_tcb.state = ThreadState::Ready;
+                let mut buf = if let ThreadState::Waiting(_, buf) =
+                    core::mem::replace(&mut dest_tcb.state, ThreadState::Ready)
+                {
+                    buf
+                } else {
+                    unreachable!()
+                };
+                let task = self
+                    .tasks
+                    .get(dest_tcb.task.0)
+                    .ok_or(KernelError::InvalidTaskRef)?;
+                assert!(dest_tcb.pop_msg(task, &mut buf)?);
                 let dest_tcb_priority = dest_tcb.priority;
                 self.scheduler
                     .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
@@ -149,16 +161,25 @@ impl Kernel {
 
     /// Sends a message to an endpoint, and pauses the current thread's execution till a response is
     /// received
-    pub fn call<T>(&mut self, dest: CapabilityRef, msg: &T) -> Result<ThreadRef, KernelError> {
+    pub fn call(
+        &mut self,
+        dest: CapabilityRef,
+        msg: Box<[u8]>,
+        out_buf: TaskPtrMut<'static, [u8]>,
+    ) -> Result<ThreadRef, KernelError> {
         let src_ref = self.scheduler.current_thread.tcb_ref;
         let endpoint = self.scheduler.current_thread()?.endpoint(dest)?;
         self.send_inner(endpoint, msg, Some(src_ref))?;
-        self.wait(endpoint.addr | 0x80000000) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
+        self.wait(endpoint.addr | 0x80000000, out_buf) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
     }
 
-    pub fn wait(&mut self, mask: usize) -> Result<ThreadRef, KernelError> {
+    pub fn wait(
+        &mut self,
+        mask: usize,
+        out_buf: TaskPtrMut<'static, [u8]>,
+    ) -> Result<ThreadRef, KernelError> {
         let src = self.scheduler.current_thread_mut()?;
-        src.state = ThreadState::Waiting(mask);
+        src.state = ThreadState::Waiting(mask, out_buf);
         self.scheduler.wait_current_thread()
     }
 
@@ -178,9 +199,51 @@ impl Kernel {
         args: &SyscallArgs,
     ) -> Result<(Option<ThreadRef>, SyscallReturn), KernelError> {
         match index.get(abi::SyscallIndex::SYSCALL_FN) {
-            abi::SyscallFn::Send => todo!(),
+            abi::SyscallFn::Send => {
+                if index.get(SyscallIndex::SYSCALL_ARG_TYPE) == SyscallDataType::Page {
+                    todo!()
+                }
+                let tcb = self.scheduler.current_thread()?;
+                let slice = unsafe {
+                    core::slice::from_raw_parts(args.arg1 as *const u8, args.arg2 as usize)
+                };
+                let msg = Box::from(slice);
+                let cap = index.get(SyscallIndex::CAPABILITY);
+                let cap = CapabilityRef(cap as usize);
+                let priority = tcb.priority;
+                self.send(cap, msg)?;
+                if let Some(thread) = self.scheduler.next_thread(priority) {
+                    Ok((
+                        self.scheduler.switch_thread(thread).map(Some)?,
+                        SyscallReturn::new(),
+                    ))
+                } else {
+                    Ok((None, SyscallReturn::new()))
+                }
+            }
             abi::SyscallFn::Call => todo!(),
-            abi::SyscallFn::Recv => todo!(),
+            abi::SyscallFn::Recv => {
+                if index.get(SyscallIndex::SYSCALL_ARG_TYPE) == SyscallDataType::Page {
+                    todo!()
+                }
+                let mut out_buf: TaskPtrMut<'_, [u8]> =
+                    unsafe { TaskPtrMut::from_raw_parts(args.arg1, args.arg2 as usize) };
+                let tcb = self.scheduler.current_thread_mut()?;
+
+                let task = self
+                    .tasks
+                    .get(tcb.task.0)
+                    .ok_or(KernelError::InvalidTaskRef)?;
+                let mask = index.get(SyscallIndex::CAPABILITY);
+                if !tcb.pop_msg(task, &mut out_buf)? {
+                    Ok((
+                        Some(self.wait(mask as usize, out_buf)?),
+                        SyscallReturn::new(),
+                    ))
+                } else {
+                    Ok((None, SyscallReturn::new()))
+                }
+            }
             abi::SyscallFn::Log => {
                 let tcb = self.scheduler.current_thread()?;
                 let slice = unsafe {
@@ -412,6 +475,7 @@ pub enum KernelError {
     InvalidCapabilityRef,
     WrongCapabilityType,
     StackExhausted,
+    InvalidTaskPtr,
 }
 
 #[derive(Clone, Copy)]
@@ -450,6 +514,39 @@ impl TCB {
     pub fn add_cap(&mut self, capability: Capability) {
         let _ = self.capabilities.push(capability);
     }
+
+    fn pop_msg(
+        &mut self,
+        task: &Task,
+        out_buf: &mut TaskPtrMut<'_, [u8]>,
+    ) -> Result<bool, KernelError> {
+        // TODO(sphw): respect mask
+        let msg = if let Some(msg) = self.req_queue.dequeue() {
+            msg
+        } else {
+            return Ok(false);
+        };
+        let out_buf = task
+            .validate_mut_ptr(out_buf)
+            .ok_or(KernelError::InvalidTaskPtr)?;
+        let body = &msg.inner.as_ref().unwrap().body;
+        if out_buf.len() != body.len() {
+            self.saved_state.set_syscall_return(
+                SyscallReturn::new()
+                    .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Error)
+                    .with(
+                        SyscallReturn::SYSCALL_LEN,
+                        (u8::from(abi::Error::ReturnTypeMismatch)) as u64,
+                    ),
+            );
+            return Ok(true);
+        }
+        out_buf.copy_from_slice(&body);
+        self.saved_state.set_syscall_return(
+            SyscallReturn::new().with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+        );
+        Ok(true)
+    }
 }
 
 #[derive(Default)]
@@ -469,7 +566,7 @@ impl DomainEntry {
 
 #[derive(Debug)]
 enum ThreadState {
-    Waiting(usize),
+    Waiting(usize, TaskPtrMut<'static, [u8]>),
     Ready,
     Running,
 }
@@ -587,8 +684,7 @@ pub struct IPCMsg {
 #[repr(C)]
 pub struct IPCMsgInner {
     reply_thread: Option<ThreadRef>,
-    body: AtomicPtr<()>,
-    len: usize,
+    body: Box<[u8]>,
 }
 
 macro_rules! linked_impl {
@@ -626,160 +722,4 @@ pub struct TaskDesc {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn test_kernel() -> Kernel {
-        Kernel::new(
-            heapless::Vec::from_slice(&[Task::new(
-                0..0x400,
-                0..0x400,
-                100,
-                Vec::from_slice(&[0..200]).unwrap(),
-                Vec::default(),
-                unsafe { TaskPtr::from_raw_parts(1, ()) },
-                false,
-            )])
-            .unwrap(),
-            TaskRef(0),
-        )
-        .unwrap()
-    }
-
-    #[test]
-    fn test_simple_tick_schedule() {
-        let mut kernel = test_kernel();
-        let a = TCB::new(TaskRef(1), 0, 7, 5, 6, 0);
-        let b = TCB::new(TaskRef(2), 0, 7, 3, 3, 0);
-        kernel.scheduler.spawn(a).unwrap();
-        kernel.scheduler.spawn(b).unwrap();
-        for _ in 0..5 {
-            let next = kernel
-                .scheduler
-                .tick()
-                .unwrap()
-                .expect("should switch to a");
-            assert_eq!(*next, 1, "should switch to a");
-            for _ in 0..4 {
-                let next = kernel.scheduler.tick().unwrap();
-                assert_eq!(next, None);
-            }
-            let next = kernel
-                .scheduler
-                .tick()
-                .unwrap()
-                .expect("should switch to b");
-            assert_eq!(*next, 2);
-            for _ in 0..2 {
-                let next = kernel.scheduler.tick().unwrap();
-                assert_eq!(next, None);
-            }
-            let next = kernel
-                .scheduler
-                .tick()
-                .unwrap()
-                .expect("should switch to idle");
-            assert_eq!(*next, 0);
-            for _ in 0..2 {
-                let next = kernel.scheduler.tick().unwrap();
-                assert_eq!(next, None);
-            }
-            let next = kernel
-                .scheduler
-                .tick()
-                .unwrap()
-                .expect("should switch to b");
-            assert_eq!(*next, 2);
-            for _ in 0..2 {
-                let next = kernel.scheduler.tick().unwrap();
-                assert_eq!(next, None);
-            }
-        }
-    }
-
-    #[test]
-    fn test_send_schedule() {
-        let mut kernel = test_kernel();
-        let a = TCB::new(TaskRef(1), 0, 7, 5, 6, 0);
-        let mut b = TCB::new(TaskRef(2), 0, 7, 3, 3, 0);
-        b.capabilities
-            .push(Capability::Endpoint(Endpoint {
-                tcb_ref: ThreadRef(1),
-                addr: 1,
-            }))
-            .map_err(|_| ())
-            .unwrap();
-        kernel.scheduler.spawn(a).unwrap();
-        kernel.scheduler.spawn(b).unwrap();
-        let next = kernel
-            .scheduler
-            .tick()
-            .unwrap()
-            .expect("should switch to a");
-        assert_eq!(*next, 1, "should switch to a");
-        let next = kernel.wait(0x1).unwrap();
-        assert_eq!(*next, 2, "should switch to b");
-        let msg = [1u8, 2, 3];
-        kernel.send(CapabilityRef(0), &msg).expect("send failed");
-        for _ in 0..2 {
-            let next = kernel.scheduler.tick().unwrap();
-            assert_eq!(next, None);
-        }
-        let next = kernel
-            .scheduler
-            .tick()
-            .unwrap()
-            .expect("should switch to a");
-        assert_eq!(*next, 1, "should switch to a");
-    }
-
-    #[test]
-    fn test_call_schedule() {
-        let mut kernel = test_kernel();
-        let a = TCB::new(TaskRef(1), 0, 7, 5, 6, 0);
-        let mut b = TCB::new(TaskRef(2), 0, 7, 3, 3, 0);
-        b.capabilities
-            .push(Capability::Endpoint(Endpoint {
-                tcb_ref: ThreadRef(1),
-                addr: 1,
-            }))
-            .map_err(|_| ())
-            .unwrap();
-        kernel.scheduler.spawn(a).unwrap();
-        kernel.scheduler.spawn(b).unwrap();
-        let next = kernel
-            .scheduler
-            .tick()
-            .unwrap()
-            .expect("should switch to a");
-        assert_eq!(*next, 1, "should switch to a");
-        let next = kernel.wait(0x1).unwrap();
-        assert_eq!(*next, 2, "should switch to b");
-        let msg = [1u8, 2, 3];
-        let next = kernel.call(CapabilityRef(0), &msg).expect("send failed");
-        assert_eq!(*next, 1, "should switch to a");
-    }
-
-    #[test]
-    fn test_alloc_stack() {
-        let mut task = Task::new(
-            0..1,
-            0..1,
-            10,
-            Vec::from_slice(&[0..50]).unwrap(),
-            Vec::default(),
-            unsafe { TaskPtr::from_raw_parts(0, ()) },
-            false,
-        );
-        for i in 0..5 {
-            assert_eq!(task.alloc_stack(), Some(i * 10));
-        }
-        assert_eq!(task.alloc_stack(), None);
-        task.make_stack_available(0);
-        assert_eq!(task.alloc_stack(), Some(0));
-        task.make_stack_available(10);
-        assert_eq!(task.alloc_stack(), Some(10));
-        task.make_stack_available(40);
-        assert_eq!(task.alloc_stack(), Some(40));
-    }
-}
+mod tests;
