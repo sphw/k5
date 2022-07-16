@@ -81,10 +81,12 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
             let mut current_pos = 0;
             let mut chunk_len = read_buf[current_pos + 1] as usize;
             while len >= (chunk_len + current_pos + 2) {
+                let start = current_pos + 2;
+                let end = start + chunk_len;
+                let buf = &read_buf[start..end];
                 let task_id = read_buf[current_pos] as usize;
                 let elf = &task_elfs[task_id];
                 let decoder = &mut task_decoders[task_id];
-                let buf = &read_buf[current_pos + 2..chunk_len + current_pos + 2];
                 decoder.received(buf);
                 loop {
                     match decoder.decode() {
@@ -104,7 +106,7 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
                         }
                     }
                 }
-                current_pos += chunk_len + 1;
+                current_pos += chunk_len + 2;
                 chunk_len = read_buf[current_pos + 1] as usize;
             }
         }
