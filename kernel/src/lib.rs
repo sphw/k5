@@ -25,7 +25,6 @@ use core::{
     ops::Range,
     pin::Pin,
     ptr::NonNull,
-    sync::atomic::AtomicPtr,
 };
 use heapless::Vec;
 use task_ptr::{TaskPtr, TaskPtrMut};
@@ -204,8 +203,12 @@ impl Kernel {
                     todo!()
                 }
                 let tcb = self.scheduler.current_thread()?;
-                let slice = unsafe {
-                    core::slice::from_raw_parts(args.arg1 as *const u8, args.arg2 as usize)
+                let slice = match self.get_syscall_buf::<1024>(tcb, args) {
+                    Ok(s) => s,
+                    Err(KernelError::ABI(e)) => {
+                        return Ok((None, e.into()));
+                    }
+                    Err(e) => return Err(e),
                 };
                 let msg = Box::from(slice);
                 let cap = index.get(SyscallIndex::CAPABILITY);
@@ -229,7 +232,6 @@ impl Kernel {
                 let mut out_buf: TaskPtrMut<'_, [u8]> =
                     unsafe { TaskPtrMut::from_raw_parts(args.arg1, args.arg2 as usize) };
                 let tcb = self.scheduler.current_thread_mut()?;
-
                 let task = self
                     .tasks
                     .get(tcb.task.0)
@@ -246,19 +248,20 @@ impl Kernel {
             }
             abi::SyscallFn::Log => {
                 let tcb = self.scheduler.current_thread()?;
-                let slice = unsafe {
-                    core::slice::from_raw_parts(args.arg1 as *const u8, args.arg2 as usize)
+                let log_buf = match self.get_syscall_buf::<255>(tcb, args) {
+                    Ok(s) => s,
+                    Err(KernelError::ABI(e)) => {
+                        return Ok((None, e.into()));
+                    }
+                    Err(e) => return Err(e),
                 };
-                let mut buf = [0; 1024];
-                if slice.len() >= 1023 {
-                    return Ok((None, SyscallReturn::new())); //TODO(sphw): use proper error
-                }
+                let mut buf = [0u8; 257];
                 buf[0] = tcb.task.0 as u8;
-                buf[1] = slice.len() as u8;
+                buf[1] = log_buf.len() as u8;
                 // NOTE: this assumes that the internal task index is the same as codegen task index, which is true for embedded,
                 // but for systems with dynamic tasks is not true.
-                buf[2..slice.len() + 2].clone_from_slice(&slice);
-                unsafe { arch::log(&buf[..slice.len() + 2]) };
+                buf[2..log_buf.len() + 2].clone_from_slice(&log_buf);
+                unsafe { arch::log(&buf[..log_buf.len() + 2]) };
                 Ok((None, SyscallReturn::new()))
             }
             abi::SyscallFn::Caps => {
@@ -279,6 +282,29 @@ impl Kernel {
                 Ok((None, ret))
             }
         }
+    }
+
+    #[inline(always)]
+    fn get_syscall_buf<const N: usize>(
+        &self,
+        tcb: &TCB,
+        args: &SyscallArgs,
+    ) -> Result<&[u8], KernelError> {
+        let task = self
+            .tasks
+            .get(tcb.task.0)
+            .ok_or(KernelError::InvalidTaskRef)?;
+        let slice: TaskPtr<'_, [u8]> =
+            unsafe { TaskPtr::from_raw_parts(args.arg1, args.arg2 as usize) };
+        let slice = if let Some(buf) = task.validate_ptr(slice) {
+            buf
+        } else {
+            return Err(KernelError::ABI(abi::Error::BadAccess));
+        };
+        if slice.len() > N {
+            return Err(KernelError::ABI(abi::Error::BufferOverflow));
+        }
+        Ok(slice)
     }
 }
 
@@ -476,6 +502,7 @@ pub enum KernelError {
     WrongCapabilityType,
     StackExhausted,
     InvalidTaskPtr,
+    ABI(abi::Error),
 }
 
 #[derive(Clone, Copy)]
@@ -531,14 +558,8 @@ impl TCB {
             .ok_or(KernelError::InvalidTaskPtr)?;
         let body = &msg.inner.as_ref().unwrap().body;
         if out_buf.len() != body.len() {
-            self.saved_state.set_syscall_return(
-                SyscallReturn::new()
-                    .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Error)
-                    .with(
-                        SyscallReturn::SYSCALL_LEN,
-                        (u8::from(abi::Error::ReturnTypeMismatch)) as u64,
-                    ),
-            );
+            self.saved_state
+                .set_syscall_return(abi::Error::ReturnTypeMismatch.into());
             return Ok(true);
         }
         out_buf.copy_from_slice(&body);

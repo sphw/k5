@@ -104,6 +104,15 @@ impl SyscallReturn {
     }
 }
 
+impl From<Error> for SyscallReturn {
+    #[inline]
+    fn from(err: Error) -> Self {
+        SyscallReturn::new()
+            .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Error)
+            .with(SyscallReturn::SYSCALL_LEN, (u8::from(err)) as u64)
+    }
+}
+
 impl FromBits<u64> for SyscallReturnType {
     const BITS: u32 = 2;
     type Error = &'static str;
@@ -127,6 +136,8 @@ impl FromBits<u64> for SyscallReturnType {
 #[repr(u8)]
 pub enum Error {
     ReturnTypeMismatch,
+    BadAccess,
+    BufferOverflow,
     Unknown(u8),
 }
 
@@ -134,6 +145,8 @@ impl From<u8> for Error {
     fn from(code: u8) -> Self {
         match code {
             1 => Error::ReturnTypeMismatch,
+            2 => Error::BadAccess,
+            3 => Error::BufferOverflow,
             code => Error::Unknown(code),
         }
     }
@@ -143,6 +156,8 @@ impl From<Error> for u8 {
     fn from(err: Error) -> Self {
         match err {
             Error::ReturnTypeMismatch => 1,
+            Error::BadAccess => 2,
+            Error::BufferOverflow => 3,
             Error::Unknown(code) => code,
         }
     }
