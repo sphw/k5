@@ -2,6 +2,10 @@ use std::{
     fs,
     io::{self, Read},
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -11,6 +15,7 @@ use colored::Colorize;
 use defmt_decoder::{DecodeError, Frame, Locations};
 use probe_rs::{Core, MemoryInterface as _, Session};
 use probe_rs_rtt::{Rtt, ScanRegion, UpChannel};
+use signal_hook::consts::signal;
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -75,7 +80,9 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
     let mut read_buf = [0; 1024];
     let mut was_halted = false;
     let current_dir = std::env::current_dir().unwrap();
-    loop {
+    let exit = Arc::new(AtomicBool::new(false));
+    let sig_id = signal_hook::flag::register(signal::SIGINT, exit.clone())?;
+    while !exit.load(Ordering::Relaxed) {
         let len = rtt.read(&mut core, &mut read_buf)?;
         if len != 0 {
             let mut current_pos = 0;
@@ -117,6 +124,12 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
         }
         was_halted = is_halted;
     }
+    signal_hook::low_level::unregister(sig_id);
+    signal_hook::flag::register_conditional_default(signal::SIGINT, exit.clone())?;
+    if exit.load(Ordering::Relaxed) {
+        core.halt(TIMEOUT)?;
+    }
+
     Ok(())
 }
 

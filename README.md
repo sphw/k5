@@ -15,6 +15,15 @@ Now lets discuss the "bad" reasons. I've always been fascinated by kernel develo
 ## What
 Right now there is some basic functionality mainly for ARMv8M. There is an example project for the STM32L5, though it *should* work on any v8m CPU with a little modification. You can send and recieve messages between threads, the scheduler will pre-empt your tasks at set intervels, and there is a built in logging framework using defmt.
 
+### Dir Layout
+- `./kernel` - Contains the kernel as a library that will be used by a host application
+- `./userspace` - The userspace library, contains functions for syscalls, startup, and logging
+- `./abi` - The ABI (application binary interface) includes shared data-structures between the kernel and userspace
+- `./codegen` - Simple code-generation utility to take a list of tasks, and produce Rust
+- `./examples` - Example "apps" for various boards, right now just stm32l5.
+- `./cli` - Contains the `k5` build tool, it supports flashing, building, and printing logs from a k5 app
+
+
 ## What's Next
 
 I've got plans! So so many plans... Basically I think the order of tasks will be as follows

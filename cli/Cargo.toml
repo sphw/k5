@@ -23,3 +23,4 @@ kdam = "0.1"
 object = { version = "0.27", default-features = false }
 defmt-decoder = { version = "=0.3.2", features = ["unstable"] }
 pathdiff = "0.2.0"
+signal-hook = "0.3"
