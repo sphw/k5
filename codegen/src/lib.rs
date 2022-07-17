@@ -47,7 +47,12 @@ ram_region: {:?},
 
         for (i, task) in self.tasks.iter().enumerate() {
             code += &format!(
-                "pub const TASK_{}_INDEX: usize = {};",
+                "pub const TASK_{}_INDEX: usize = {};\n",
+                task.name.to_uppercase(),
+                i
+            );
+            code += &format!(
+                "pub const {}: kernel::ThreadBuilder = unsafe {{ kernel::ThreadBuilder::new({}) }};\n",
                 task.name.to_uppercase(),
                 i
             );

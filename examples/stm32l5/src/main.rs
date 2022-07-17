@@ -5,13 +5,10 @@
 extern crate alloc;
 
 use alloc_cortex_m::CortexMHeap;
-use core::panic::PanicInfo;
+use core::{mem::MaybeUninit, panic::PanicInfo};
 use cortex_m_rt::entry;
 
-mod task_table {
-    #![allow(dead_code)]
-    include!(concat!(env!("OUT_DIR"), "/codegen.rs"));
-}
+kernel::include_task_table! {}
 
 #[global_allocator]
 static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
@@ -20,25 +17,16 @@ static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 fn main() -> ! {
     {
         const HEAP_SIZE: usize = 0x1000;
-        static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
-        unsafe { crate::ALLOCATOR.init(HEAP.as_mut_ptr(), HEAP_SIZE) }
+        static mut HEAP: &mut [MaybeUninit<u8>; HEAP_SIZE] =
+            &mut [MaybeUninit::uninit(); HEAP_SIZE];
+        // Safety: we only ever access this once durring init, so this operation is safe
+        crate::ALLOCATOR.init(unsafe { HEAP })
     }
-    let kernel =
-        unsafe { kernel::arch::init_kernel(task_table::TASKS, task_table::TASK_IDLE_INDEX) };
-    let tcb = kernel
-        .scheduler
-        .get_tcb_mut(abi::ThreadRef::idle())
-        .unwrap();
-    tcb.add_cap(abi::Capability::Endpoint(abi::Endpoint {
-        tcb_ref: abi::ThreadRef(1),
-        addr: 0,
-    }));
-    let foo_ref = kernel::TaskRef(task_table::TASK_FOO_INDEX);
-    let task = kernel.task(foo_ref).unwrap();
-    kernel
-        .spawn_thread(foo_ref, 7, 10, 10, task.entrypoint)
-        .unwrap();
-    kernel.start();
+    let mut kernel = kernel::KernelBuilder::new(task_table::TASKS);
+    let idle = kernel.idle_thread(task_table::IDLE);
+    let foo = kernel.thread(task_table::FOO.priority(7).budget(10).cooldown(10));
+    kernel.attach_endpoint(idle, foo, 0);
+    kernel.start()
 }
 
 #[alloc_error_handler]

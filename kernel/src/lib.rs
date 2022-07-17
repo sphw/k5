@@ -11,6 +11,8 @@ extern crate alloc;
 pub mod arch;
 pub mod task_ptr;
 
+pub mod builder;
+pub use builder::*;
 #[cfg(test)]
 mod tests;
 
@@ -40,7 +42,7 @@ pub struct Kernel {
 }
 
 impl Kernel {
-    pub fn from_tasks(tasks: &[TaskDesc], idle_index: usize) -> Result<Self, KernelError> {
+    pub fn from_tasks(tasks: &[TaskDesc]) -> Result<Self, KernelError> {
         let tasks: heapless::Vec<_, 5> = tasks
             .iter()
             .map(|desc| {
@@ -55,11 +57,11 @@ impl Kernel {
                 )
             })
             .collect();
-        let kernel = Kernel::new(tasks, TaskRef(idle_index))?;
+        let kernel = Kernel::new(tasks)?;
         Ok(kernel)
     }
 
-    pub fn new(tasks: Vec<Task, 5>, idle_ref: TaskRef) -> Result<Self, KernelError> {
+    pub fn new(tasks: Vec<Task, 5>) -> Result<Self, KernelError> {
         let current_thread = ThreadTime {
             tcb_ref: ThreadRef(0),
             time: 20,
@@ -72,7 +74,7 @@ impl Kernel {
             d.write(List::new());
         }
         let domains: [List<DomainEntry>; PRIORITY_COUNT] = unsafe { mem::transmute(domains) };
-        let mut kernel = Kernel {
+        Ok(Kernel {
             scheduler: Scheduler {
                 tcbs,
                 current_thread,
@@ -80,10 +82,7 @@ impl Kernel {
                 domains,
             },
             tasks,
-        };
-        let task = kernel.task(idle_ref)?;
-        kernel.spawn_thread(idle_ref, 0, usize::MAX, 0, task.entrypoint)?;
-        Ok(kernel)
+        })
     }
 
     pub fn spawn_thread(
@@ -155,7 +154,7 @@ impl Kernel {
                     .tasks
                     .get(dest_tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
-                assert!(dest_tcb.pop_msg(task, addr, &mut buf, &mut recv_resp)?);
+                assert!(dest_tcb.recv(task, addr, &mut buf, &mut recv_resp)?);
                 let dest_tcb_priority = dest_tcb.priority;
                 self.scheduler
                     .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
@@ -283,7 +282,7 @@ impl Kernel {
                     .get(tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
                 let mask = args.arg3;
-                if !tcb.pop_msg(task, mask, &mut out_buf, &mut recv_resp)? {
+                if !tcb.recv(task, mask, &mut out_buf, &mut recv_resp)? {
                     Ok((
                         Some(self.wait(mask as usize, out_buf, recv_resp)?),
                         SyscallReturn::new(),
@@ -562,10 +561,8 @@ pub struct TaskRef(pub usize);
 #[repr(C)]
 pub struct TCB {
     saved_state: arch::SavedThreadState,
-    //_pad: usize,
     task: TaskRef, // Maybe use RC for this
     req_queue: List<IPCMsg>,
-    //reply_queue: List<IPCMsg>,
     state: ThreadState,
     priority: usize,
     budget: usize,
@@ -627,7 +624,7 @@ impl TCB {
         }));
     }
 
-    fn pop_msg(
+    fn recv(
         &mut self,
         task: &Task,
         mask: usize,

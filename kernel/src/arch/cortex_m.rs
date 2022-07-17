@@ -1,4 +1,5 @@
 use core::arch::asm;
+use core::sync::atomic::AtomicBool;
 use core::{
     mem, ptr,
     sync::atomic::{AtomicPtr, Ordering},
@@ -14,13 +15,21 @@ use crate::{task_ptr::TaskPtrMut, Kernel, Task, TaskDesc, TCB};
 const INITIAL_PSR: u32 = 1 << 24;
 const EXC_RETURN: u32 = 0xFFFFFFED; //FIXME(sphw): this is only correct on v8m in secure mode
 
+static mut KERNEL_INIT: AtomicBool = AtomicBool::new(false);
 static mut KERNEL: MaybeUninit<Kernel> = MaybeUninit::uninit();
 #[no_mangle]
 static mut CURRENT_TCB: AtomicPtr<TCB> = AtomicPtr::new(ptr::null_mut());
 
-pub unsafe fn init_kernel(tasks: &[TaskDesc], idle_index: usize) -> &mut Kernel {
-    init_log();
-    KERNEL.write(Kernel::from_tasks(tasks, idle_index).unwrap())
+pub fn init_kernel<'k, 't>(tasks: &'t [TaskDesc]) -> &'k mut Kernel {
+    unsafe {
+        if KERNEL_INIT.load(Ordering::SeqCst) {
+            panic!("kernel already inited");
+        }
+        init_log();
+        let kern = KERNEL.write(Kernel::from_tasks(tasks).unwrap());
+        KERNEL_INIT.store(true, Ordering::SeqCst);
+        kern
+    }
 }
 
 #[inline]
