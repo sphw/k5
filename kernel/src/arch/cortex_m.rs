@@ -140,7 +140,7 @@ impl SavedThreadState {
         unsafe { mem::transmute(self) }
     }
 
-    fn syscall_args_mut(&mut self) -> &mut SyscallArgs {
+    pub fn syscall_args_mut(&mut self) -> &mut SyscallArgs {
         // Safety: repr(c) guarentees the order of fields, we are taking the first
         // 6 fields as SyscallArgs
         unsafe { mem::transmute(self) }

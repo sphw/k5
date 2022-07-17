@@ -15,8 +15,8 @@ pub mod task_ptr;
 mod tests;
 
 use abi::{
-    CapListEntry, Capability, CapabilityRef, Endpoint, SyscallArgs, SyscallDataType, SyscallIndex,
-    SyscallReturn, SyscallReturnType, ThreadRef,
+    CapListEntry, Capability, CapabilityRef, Endpoint, RecvResp, SyscallArgs, SyscallDataType,
+    SyscallIndex, SyscallReturn, SyscallReturnType, ThreadRef,
 };
 use alloc::boxed::Box;
 use cordyceps::{
@@ -139,20 +139,22 @@ impl Kernel {
             ..Default::default()
         }));
 
-        if let ThreadState::Waiting(mask, _) = dest_tcb.state {
-            if mask & endpoint.addr == endpoint.addr {
-                let mut buf = if let ThreadState::Waiting(_, buf) =
-                    core::mem::replace(&mut dest_tcb.state, ThreadState::Ready)
-                {
-                    buf
-                } else {
-                    unreachable!()
-                };
+        if let ThreadState::Waiting { addr, .. } = dest_tcb.state {
+            if addr & endpoint.addr == endpoint.addr {
+                let (mut buf, mut recv_resp) =
+                    if let ThreadState::Waiting {
+                        out_buf, recv_resp, ..
+                    } = core::mem::replace(&mut dest_tcb.state, ThreadState::Ready)
+                    {
+                        (out_buf, recv_resp)
+                    } else {
+                        unreachable!()
+                    };
                 let task = self
                     .tasks
                     .get(dest_tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
-                assert!(dest_tcb.pop_msg(task, mask, &mut buf)?);
+                assert!(dest_tcb.pop_msg(task, addr, &mut buf, &mut recv_resp)?);
                 let dest_tcb_priority = dest_tcb.priority;
                 self.scheduler
                     .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
@@ -168,6 +170,7 @@ impl Kernel {
         dest: CapabilityRef,
         msg: Box<[u8]>,
         out_buf: TaskPtrMut<'static, [u8]>,
+        recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
     ) -> Result<ThreadRef, KernelError> {
         let src_ref = self.scheduler.current_thread.tcb_ref;
         let endpoint = self.scheduler.current_thread()?.endpoint(dest)?;
@@ -176,16 +179,21 @@ impl Kernel {
             addr: endpoint.addr | 0x80000000,
         };
         self.send_inner(endpoint, msg, Some(reply_endpoint))?;
-        self.wait(endpoint.addr | 0x80000000, out_buf) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
+        self.wait(endpoint.addr | 0x80000000, out_buf, recv_resp) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
     }
 
     pub fn wait(
         &mut self,
         mask: usize,
         out_buf: TaskPtrMut<'static, [u8]>,
+        recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
     ) -> Result<ThreadRef, KernelError> {
         let src = self.scheduler.current_thread_mut()?;
-        src.state = ThreadState::Waiting(mask, out_buf);
+        src.state = ThreadState::Waiting {
+            addr: mask,
+            out_buf,
+            recv_resp,
+        };
         self.scheduler.wait_current_thread()
     }
 
@@ -237,15 +245,18 @@ impl Kernel {
                 }
                 let mut out_buf: TaskPtrMut<'_, [u8]> =
                     unsafe { TaskPtrMut::from_raw_parts(args.arg1, args.arg2 as usize) };
+                let mut recv_resp: TaskPtrMut<'_, MaybeUninit<RecvResp>> =
+                    unsafe { TaskPtrMut::from_raw_parts(args.arg4, ()) };
+
                 let tcb = self.scheduler.current_thread_mut()?;
                 let task = self
                     .tasks
                     .get(tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
                 let mask = args.arg3;
-                if !tcb.pop_msg(task, mask, &mut out_buf)? {
+                if !tcb.pop_msg(task, mask, &mut out_buf, &mut recv_resp)? {
                     Ok((
-                        Some(self.wait(mask as usize, out_buf)?),
+                        Some(self.wait(mask as usize, out_buf, recv_resp)?),
                         SyscallReturn::new(),
                     ))
                 } else {
@@ -581,7 +592,7 @@ impl TCB {
     }
 
     pub fn add_cap(&mut self, cap: Capability) {
-        let _ = self.capabilities.push_back(Box::pin(CapEntry {
+        self.capabilities.push_back(Box::pin(CapEntry {
             links: Links::default(),
             cap,
         }));
@@ -592,6 +603,7 @@ impl TCB {
         task: &Task,
         mask: usize,
         out_buf: &mut TaskPtrMut<'_, [u8]>,
+        recv_resp: &mut TaskPtrMut<'_, MaybeUninit<RecvResp>>,
     ) -> Result<bool, KernelError> {
         let mut cursor = self.req_queue.cursor_front_mut();
         cursor.move_prev();
@@ -612,16 +624,28 @@ impl TCB {
         let out_buf = task
             .validate_mut_ptr(out_buf)
             .ok_or(KernelError::InvalidTaskPtr)?;
-        let body = &msg.inner.as_ref().unwrap().body;
-        if out_buf.len() != body.len() {
+        let inner = &msg.inner.as_ref().unwrap();
+        if out_buf.len() != inner.body.len() {
             self.saved_state
                 .set_syscall_return(abi::Error::ReturnTypeMismatch.into());
             return Ok(true);
         }
-        out_buf.copy_from_slice(body);
+        out_buf.copy_from_slice(&inner.body);
         self.saved_state.set_syscall_return(
             SyscallReturn::new().with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
         );
+        let recv_resp = task
+            .validate_mut_ptr(recv_resp)
+            .ok_or(KernelError::InvalidTaskPtr)?; // TODO: make syscall return
+        let recv_resp = recv_resp.write(RecvResp {
+            cap: None,
+            inner: abi::RecvRespInner::Copy(inner.body.len()),
+        });
+        if let Some(reply) = inner.reply_endpoint {
+            self.add_cap(Capability::Endpoint(reply));
+            let cap_ptr = &*self.capabilities.back().unwrap() as *const CapEntry;
+            recv_resp.cap = Some(CapabilityRef(cap_ptr.addr()));
+        }
         Ok(true)
     }
 }
@@ -643,7 +667,11 @@ impl DomainEntry {
 
 #[derive(Debug)]
 enum ThreadState {
-    Waiting(usize, TaskPtrMut<'static, [u8]>),
+    Waiting {
+        addr: usize,
+        out_buf: TaskPtrMut<'static, [u8]>,
+        recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
+    },
     Ready,
     Running,
 }

@@ -218,10 +218,16 @@ pub struct CapListEntry {
     pub desc: Capability,
 }
 
-// LOGING
-// Basic system will piggy back almost fully on defmt
-// demft stores all their log info in an elf
-// there is 1 elf per task
-// we will send logs to the kernel which will send them to rtt with the associated task index
-// the parser will get the first byte, holding the index, and then parse the rest of the log using the
-// appropriate symbol table
+#[derive(Format)]
+#[repr(C)]
+pub struct RecvResp {
+    pub cap: Option<CapabilityRef>,
+    pub inner: RecvRespInner,
+}
+
+#[derive(Format)]
+#[repr(C)]
+pub enum RecvRespInner {
+    Copy(usize),
+    Page(*const ()),
+}

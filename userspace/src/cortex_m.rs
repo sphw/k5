@@ -5,8 +5,8 @@ use core::{
 };
 
 use abi::{
-    CapListEntry, Capability, CapabilityRef, Error, SyscallArgs, SyscallDataType, SyscallFn,
-    SyscallIndex, SyscallReturn, SyscallReturnType,
+    CapListEntry, Capability, CapabilityRef, Error, RecvResp, SyscallArgs, SyscallDataType,
+    SyscallFn, SyscallIndex, SyscallReturn, SyscallReturnType,
 };
 
 #[doc(hidden)]
@@ -144,16 +144,18 @@ pub fn send_copy<T: ?Sized>(capability: CapabilityRef, r: &mut T) -> Result<(), 
 pub fn recv_page<T: ?Sized>(addr: u32) -> LoanedPage<T> {
     todo!()
 }
-pub fn recv<T: ?Sized>(addr: u32, r: &mut T) -> Result<(), Error> {
+pub fn recv<T: ?Sized>(addr: u32, r: &mut T) -> Result<abi::RecvResp, Error> {
     let size = core::mem::size_of_val(r);
     let (ptr, _) = (r as *mut T).to_raw_parts();
     let index = SyscallIndex::new()
         .with(SyscallIndex::SYSCALL_ARG_TYPE, SyscallDataType::Copy)
         .with(SyscallIndex::SYSCALL_FN, SyscallFn::Recv);
+    let mut resp: MaybeUninit<RecvResp> = MaybeUninit::uninit();
     let mut args = SyscallArgs {
         arg1: ptr.addr(),
         arg2: size,
         arg3: addr as usize,
+        arg4: resp.as_mut_ptr().addr(),
         ..Default::default()
     };
     let res = unsafe { syscall(index, &mut args) };
@@ -163,7 +165,7 @@ pub fn recv<T: ?Sized>(addr: u32, r: &mut T) -> Result<(), Error> {
             Err(abi::Error::from(code as u8))
         }
         SyscallReturnType::Page => Err(abi::Error::ReturnTypeMismatch),
-        _ => Ok(()),
+        _ => Ok(unsafe { resp.assume_init() }),
     }
 }
 

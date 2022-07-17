@@ -10,8 +10,8 @@ pub fn main() -> ! {
     let mut buf = [0u8; 10];
     loop {
         match userspace::recv(0, &mut buf) {
-            Ok(_) => {
-                defmt::println!("f: {:?}", buf);
+            Ok(resp) => {
+                defmt::println!("resp: {:?} buf: {:?}", resp, buf);
             }
             Err(err) => {
                 defmt::println!("syscall err");
