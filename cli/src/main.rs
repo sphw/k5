@@ -38,20 +38,26 @@ fn main() -> color_eyre::Result<()> {
     Ok(())
 }
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
+#[clap(author, version, about = "🏔 - k5's helper tool for flashing, debugging, and building k5 projects", long_about = None)]
 enum Args {
+    /// Builds a k5 app from the `app.toml` file
     Build {
+        /// path to directory containing `app.toml`
         #[clap(default_value = ".")]
         path: PathBuf,
     },
+    /// Flashes a k5 app from the `app.toml` file, to the specified chip
     Flash {
+        /// path to directory containing `app.toml`
         #[clap(default_value = ".")]
         path: PathBuf,
         #[clap(flatten)]
         probe: flash::FlashConfig,
     },
 
+    /// Flashes and displays logs for a k5 app
     Logs {
+        /// path to directory containing `app.toml`
         #[clap(default_value = ".")]
         path: PathBuf,
         #[clap(flatten)]
