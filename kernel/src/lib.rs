@@ -136,7 +136,8 @@ impl Kernel {
                 reply_endpoint,
                 body,
             }),
-            ..Default::default()
+            links: Links::default(),
+            addr: endpoint.addr,
         }));
 
         if let ThreadState::Waiting { addr, .. } = dest_tcb.state {
@@ -232,13 +233,41 @@ impl Kernel {
                 if let Some(thread) = self.scheduler.next_thread(priority) {
                     Ok((
                         self.scheduler.switch_thread(thread).map(Some)?,
-                        SyscallReturn::new(),
+                        SyscallReturn::new()
+                            .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
                     ))
                 } else {
-                    Ok((None, SyscallReturn::new()))
+                    Ok((
+                        None,
+                        SyscallReturn::new()
+                            .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+                    ))
                 }
             }
-            abi::SyscallFn::Call => todo!(),
+            abi::SyscallFn::Call => {
+                if index.get(SyscallIndex::SYSCALL_ARG_TYPE) == SyscallDataType::Page {
+                    todo!()
+                }
+                let tcb = self.scheduler.current_thread()?;
+                let slice = match self.get_syscall_buf::<1024>(tcb, args) {
+                    Ok(s) => s,
+                    Err(KernelError::ABI(e)) => {
+                        return Ok((None, e.into()));
+                    }
+                    Err(e) => return Err(e),
+                };
+                let msg = Box::from(slice);
+                let cap = CapabilityRef(args.arg3);
+                let out_buf: TaskPtrMut<'_, [u8]> =
+                    unsafe { TaskPtrMut::from_raw_parts(args.arg5, args.arg6 as usize) };
+                let recv_resp: TaskPtrMut<'_, MaybeUninit<RecvResp>> =
+                    unsafe { TaskPtrMut::from_raw_parts(args.arg4, ()) };
+                let thread = self.call(cap, msg, out_buf, recv_resp)?;
+                Ok((
+                    self.scheduler.switch_thread(thread).map(Some)?,
+                    SyscallReturn::new(),
+                ))
+            }
             abi::SyscallFn::Recv => {
                 if index.get(SyscallIndex::SYSCALL_ARG_TYPE) == SyscallDataType::Page {
                     todo!()

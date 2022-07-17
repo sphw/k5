@@ -133,7 +133,7 @@ impl FromBits<u64> for SyscallReturnType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Format)]
 #[repr(u8)]
 pub enum Error {
     ReturnTypeMismatch,

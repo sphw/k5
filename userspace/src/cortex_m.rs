@@ -5,8 +5,8 @@ use core::{
 };
 
 use abi::{
-    CapListEntry, Capability, CapabilityRef, Error, RecvResp, SyscallArgs, SyscallDataType,
-    SyscallFn, SyscallIndex, SyscallReturn, SyscallReturnType,
+    CapListEntry, CapabilityRef, Error, RecvResp, SyscallArgs, SyscallDataType, SyscallFn,
+    SyscallIndex, SyscallReturn, SyscallReturnType,
 };
 
 #[doc(hidden)]
@@ -110,6 +110,41 @@ fn send<T: ?Sized>(ty: SyscallDataType, capability: CapabilityRef, r: &mut T) ->
 }
 
 #[inline]
+fn call<T: ?Sized>(
+    ty: SyscallDataType,
+    capability: CapabilityRef,
+    r: &mut T,
+    out: &mut T,
+) -> Result<RecvResp, Error> {
+    let size = core::mem::size_of_val(r);
+    let (ptr, _) = (r as *mut T).to_raw_parts();
+    let addr = ptr.addr();
+    let index = SyscallIndex::new()
+        .with(SyscallIndex::SYSCALL_ARG_TYPE, ty)
+        .with(SyscallIndex::SYSCALL_FN, SyscallFn::Call);
+    let mut resp: MaybeUninit<RecvResp> = MaybeUninit::uninit();
+    let out_size = core::mem::size_of_val(r);
+    let (ptr, _) = (out as *mut T).to_raw_parts();
+    let out_addr = ptr.addr();
+    let mut args = SyscallArgs {
+        arg1: addr,
+        arg2: size,
+        arg3: *capability,
+        arg4: resp.as_mut_ptr().addr(),
+        arg5: out_addr,
+        arg6: out_size,
+    };
+    let res = unsafe { syscall(index, &mut args) };
+    match res.get(SyscallReturn::SYSCALL_TYPE) {
+        SyscallReturnType::Error => {
+            let code = res.get(SyscallReturn::SYSCALL_LEN);
+            Err(abi::Error::from(code as u8))
+        }
+        _ => Ok(unsafe { resp.assume_init() }),
+    }
+}
+
+#[inline]
 pub fn log(data: &[u8]) -> Result<(), Error> {
     let (ptr, _) = data.as_ptr().to_raw_parts();
     let addr = ptr.addr();
@@ -141,9 +176,14 @@ pub fn send_copy<T: ?Sized>(capability: CapabilityRef, r: &mut T) -> Result<(), 
     send(SyscallDataType::Copy, capability, r)
 }
 
-pub fn recv_page<T: ?Sized>(addr: u32) -> LoanedPage<T> {
-    todo!()
+pub fn call_copy<T: ?Sized>(
+    capability: CapabilityRef,
+    r: &mut T,
+    out_buf: &mut T,
+) -> Result<RecvResp, Error> {
+    call(SyscallDataType::Copy, capability, r, out_buf)
 }
+
 pub fn recv<T: ?Sized>(addr: u32, r: &mut T) -> Result<abi::RecvResp, Error> {
     let size = core::mem::size_of_val(r);
     let (ptr, _) = (r as *mut T).to_raw_parts();

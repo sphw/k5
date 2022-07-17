@@ -12,9 +12,15 @@ pub fn main() -> ! {
         match userspace::recv(0, &mut buf) {
             Ok(resp) => {
                 defmt::println!("resp: {:?} buf: {:?}", resp, buf);
+                if let Some(cap) = resp.cap {
+                    buf[1..].copy_from_slice(&[0xA; 9]);
+                    if let Err(err) = userspace::send_copy(cap, &mut buf) {
+                        defmt::error!("syscall err: {:?}", err);
+                    }
+                }
             }
             Err(err) => {
-                defmt::println!("syscall err");
+                defmt::error!("syscall err: {:?}", err);
             }
         }
     }

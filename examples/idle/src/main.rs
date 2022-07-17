@@ -14,9 +14,11 @@ pub fn main() -> ! {
         a += 1;
         if a % 5000 == 0 {
             let mut buf = [0xFFu8; 10];
-            buf[0] = a as u8;
+            buf[0..4].copy_from_slice(&a.to_be_bytes());
             println!("send {:?}", buf);
-            userspace::send_copy(caps[0].cap_ref, &mut buf);
+            let mut resp_buf = [0; 10];
+            let resp = userspace::call_copy(caps[0].cap_ref, &mut buf, &mut resp_buf);
+            println!("resp {:?}, buf: {:?}", resp, resp_buf);
         }
     }
 }
