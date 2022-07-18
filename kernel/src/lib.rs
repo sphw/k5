@@ -37,8 +37,8 @@ use task_ptr::{TaskPtr, TaskPtrMut};
 
 const PRIORITY_COUNT: usize = 8;
 
-pub struct Kernel {
-    pub scheduler: Scheduler,
+pub(crate) struct Kernel {
+    pub(crate) scheduler: Scheduler,
     tasks: Vec<Task, 5>,
 }
 
@@ -168,7 +168,7 @@ impl Kernel {
 
     /// Sends a message to an endpoint, and pauses the current thread's execution till a response is
     /// received
-    pub fn call(
+    pub(crate) fn call(
         &mut self,
         dest: CapabilityRef,
         msg: Box<[u8]>,
@@ -185,7 +185,7 @@ impl Kernel {
         self.wait(endpoint.addr | 0x80000000, out_buf, recv_resp) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
     }
 
-    pub fn wait(
+    pub(crate) fn wait(
         &mut self,
         mask: usize,
         out_buf: TaskPtrMut<'static, [u8]>,
@@ -200,7 +200,7 @@ impl Kernel {
         self.scheduler.wait_current_thread()
     }
 
-    pub fn start(&mut self) -> ! {
+    pub(crate) fn start(&mut self) -> ! {
         let tcb_ref = self
             .scheduler
             .tick()
@@ -263,7 +263,7 @@ impl Kernel {
                 // Safety: the caller is giving over memory to us, to overwrite
                 // TaskPtrMut ensures that the memory belongs to the correct task
                 let out_buf = unsafe {
-                    TaskPtrMut::<'_, [u8]>::from_raw_parts(args.arg1, args.arg2 as usize)
+                    TaskPtrMut::<'_, [u8]>::from_raw_parts(args.arg5, args.arg6 as usize)
                 };
                 // Safety: the caller is giving over memory to us, to overwrite
                 // TaskPtrMut ensures that the memory belongs to the correct task
@@ -376,7 +376,7 @@ impl Kernel {
     }
 }
 
-pub struct Scheduler {
+pub(crate) struct Scheduler {
     tcbs: Vec<TCB, 15>,
     domains: [List<DomainEntry>; PRIORITY_COUNT],
     exhausted_threads: List<ExhaustedThread>,
@@ -561,7 +561,7 @@ pub enum KernelError {
 pub struct TaskRef(pub usize);
 
 #[repr(C)]
-pub struct TCB {
+pub(crate) struct TCB {
     saved_state: arch::SavedThreadState,
     task: TaskRef, // Maybe use RC for this
     req_queue: List<IPCMsg>,
@@ -679,7 +679,7 @@ impl TCB {
 }
 
 #[derive(Default)]
-pub struct DomainEntry {
+pub(crate) struct DomainEntry {
     links: list::Links<DomainEntry>,
     tcb_ref: Option<ThreadRef>,
 }
@@ -706,7 +706,7 @@ enum ThreadState {
 
 #[repr(C)]
 #[derive(Clone)]
-pub struct Task {
+pub(crate) struct Task {
     flash_memory_region: Range<usize>,
     ram_memory_region: Range<usize>,
     stack_size: usize,
@@ -786,14 +786,14 @@ struct CapEntry {
 }
 
 #[derive(Default)]
-pub struct IPCMsg {
+pub(crate) struct IPCMsg {
     links: list::Links<IPCMsg>,
     addr: usize,
     inner: Option<IPCMsgInner>,
 }
 
 #[repr(C)]
-pub struct IPCMsgInner {
+pub(crate) struct IPCMsgInner {
     reply_endpoint: Option<Endpoint>,
     body: Box<[u8]>,
 }

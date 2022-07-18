@@ -2,6 +2,12 @@ use abi::{Capability, Endpoint, ThreadRef};
 
 use crate::{Kernel, TaskDesc, TaskRef};
 
+/// Builder for creating and booting the k5 kernel
+///
+/// Each K5 app should use `KernelBuilder` to initialize tasks, and their capabilities
+/// You are required to set an idle thread using [`KernelBuilder::idle_thread`]. The idle threads runs at the lowest
+/// priority, has a cooldown of 0 and an infinite budget. This means that if no other thread is scheduable
+/// the idle thread will be run.
 pub struct KernelBuilder<'a> {
     cycles_per_tick: usize,
     idle_task_set: bool,
@@ -21,12 +27,16 @@ impl KernelBuilder<'_> {
         }
     }
 
-    /// Set's the cycles per tick
+    /// Set's the cycles per kernel tick
+    ///
+    /// Budget and cooldown are based on this tick, so changing the cyclecount
+    /// will change the behavior of your application.
     pub fn cycles_per_tick(&mut self, cycles: usize) -> &mut Self {
         self.cycles_per_tick = cycles;
         self
     }
 
+    /// Spawns a new thread, and retunrs the thread buf
     pub fn thread(&mut self, thread: ThreadBuilder) -> ThreadRef {
         let task_ref = TaskRef(thread.index);
         let task = self.kernel.task(task_ref).expect("invalid thread index");
@@ -41,6 +51,7 @@ impl KernelBuilder<'_> {
             .unwrap()
     }
 
+    /// Spawns the idle thread, this must be run at least once per builder
     pub fn idle_thread(&mut self, thread: ThreadBuilder) -> ThreadRef {
         let task_ref = TaskRef(thread.index);
         let task = self.kernel.task(task_ref).expect("invalid thread index");
@@ -59,11 +70,13 @@ impl KernelBuilder<'_> {
         t
     }
 
-    pub fn start(self) -> ! {
-        self.kernel.start()
-    }
-
-    pub fn attach_endpoint(&mut self, task: ThreadRef, dest: ThreadRef, addr: usize) -> &mut Self {
+    /// Adds a new [`abi::Endpoint`] capability to the specified task, pointing to the destination and address
+    ///
+    /// # Args
+    /// `task` is the task to add the endpoint to.
+    /// `dest` is the destination of the endpoint
+    /// `addr` is the address for the endpoint, this is used to allow a single task to accept multiple message types
+    pub fn endpoint(&mut self, task: ThreadRef, dest: ThreadRef, addr: usize) -> &mut Self {
         let _dest = self.kernel.scheduler.get_tcb(dest).unwrap();
         let task = self.kernel.scheduler.get_tcb_mut(task).unwrap();
         task.add_cap(Capability::Endpoint(Endpoint {
@@ -72,8 +85,16 @@ impl KernelBuilder<'_> {
         }));
         self
     }
+
+    /// Starts the kernel
+    pub fn start(self) -> ! {
+        self.kernel.start()
+    }
 }
 
+/// A builder for a thread, that can be passed into [`KernelBuilder`]
+///
+/// This struct will almost always be generated using the consts from the generated `task_table`
 pub struct ThreadBuilder {
     index: usize,
     priority: usize,
@@ -122,6 +143,7 @@ impl ThreadBuilder {
     }
 }
 
+/// Creates a new mod called `task_table` with the generated task table from `k5-codegen`
 #[macro_export]
 macro_rules! include_task_table {
     () => {

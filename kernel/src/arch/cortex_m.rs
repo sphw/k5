@@ -20,7 +20,7 @@ static mut KERNEL: MaybeUninit<Kernel> = MaybeUninit::uninit();
 #[no_mangle]
 static mut CURRENT_TCB: AtomicPtr<TCB> = AtomicPtr::new(ptr::null_mut());
 
-pub fn init_kernel<'k, 't>(tasks: &'t [TaskDesc]) -> &'k mut Kernel {
+pub(crate) fn init_kernel<'k, 't>(tasks: &'t [TaskDesc]) -> &'k mut Kernel {
     // Safety: this is all unsafe due to the use of static mut, but its a kernel so watcha gonna do
     unsafe {
         if KERNEL_INIT.load(Ordering::SeqCst) {
@@ -47,7 +47,7 @@ unsafe fn set_current_tcb(task: &TCB) {
     CURRENT_TCB.store(task as *const TCB as *mut TCB, Ordering::SeqCst);
 }
 
-pub fn start_root_task(task: &TCB) -> ! {
+pub(crate) fn start_root_task(task: &TCB) -> ! {
     // Safety: start root ask is only called once when the kernel is initialized
     // This is marked unsafe, since it could allow an invalid pointer being saved to global state
     // TCB's locations are stable since they are stored in the `KERNEL` global, and we currently never remove them
@@ -107,7 +107,7 @@ pub fn start_root_task(task: &TCB) -> ! {
     }
 }
 
-pub fn init_tcb_stack(task: &Task, tcb: &mut TCB) {
+pub(crate) fn init_tcb_stack(task: &Task, tcb: &mut TCB) {
     let stack_addr = tcb.stack_pointer - mem::size_of::<ExceptionFrame>();
     let mut stack_ptr: TaskPtrMut<ExceptionFrame> =
     // Safety: We are essentially inventing a lifetime here, but its fine because we are the
@@ -294,16 +294,6 @@ fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
     }
     ret
 }
-
-// pub fn set_return(ret: SyscallReturn) {
-//     let args = unsafe {
-//         let tcb = &mut *CURRENT_TCB.load(Ordering::SeqCst);
-//         tcb.saved_state.syscall_args_mut()
-//     };
-//     let (a1, a2) = ret.split();
-//     args.arg1 = a2 as usize;
-//     args.arg2 = a1 as usize;
-// }
 
 // RTT
 

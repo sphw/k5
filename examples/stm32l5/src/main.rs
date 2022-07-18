@@ -25,7 +25,7 @@ fn main() -> ! {
     let mut kernel = kernel::KernelBuilder::new(task_table::TASKS);
     let idle = kernel.idle_thread(task_table::IDLE);
     let foo = kernel.thread(task_table::FOO.priority(7).budget(10).cooldown(10));
-    kernel.attach_endpoint(idle, foo, 0);
+    kernel.endpoint(idle, foo, 0);
     kernel.start()
 }
 

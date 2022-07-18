@@ -2,7 +2,7 @@
 authors = ["Sascha Wise <me@saschawise.com>"]
 edition = "2018"
 readme = "README.md"
-name = "stm32u5"
+name = "stm32l5"
 version = "0.1.0"
 
 [dependencies]
@@ -16,7 +16,7 @@ abi = { path = "../../abi" }
 codegen = { path =  "../../codegen" }
 
 [[bin]]
-name = "stm32u5"
+name = "stm32l5"
 test = false
 bench = false
 
