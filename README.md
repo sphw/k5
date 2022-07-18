@@ -27,7 +27,7 @@ Right now there is some basic functionality mainly for ARMv8M. There is an examp
 ## What's Next
 
 I've got plans! So so many plans... Basically I think the order of tasks will be as follows
-- [ ] Finish the initial set of syscalls (recv, call, send, logs, caps)
+- [X] Finish the initial set of syscalls (recv, call, send, logs, caps)
 - [ ] Write MPU region solver and add MPU support for Cortex-M
 - [ ] Make the UX better for the kernels APIs. Basically make starting the kernel and threads easier.
 - [ ] Document both the code, and the design choices of the project

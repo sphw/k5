@@ -1,5 +1,6 @@
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![allow(dead_code)]
+#![warn(clippy::undocumented_unsafe_blocks)]
 #![feature(asm_const)]
 #![feature(asm_sym)]
 #![feature(ptr_metadata)]
@@ -8,10 +9,10 @@
 
 extern crate alloc;
 
-pub mod arch;
-pub mod task_ptr;
+mod arch;
+mod task_ptr;
 
-pub mod builder;
+mod builder;
 pub use builder::*;
 #[cfg(test)]
 mod tests;
@@ -42,7 +43,7 @@ pub struct Kernel {
 }
 
 impl Kernel {
-    pub fn from_tasks(tasks: &[TaskDesc]) -> Result<Self, KernelError> {
+    pub(crate) fn from_tasks(tasks: &[TaskDesc]) -> Result<Self, KernelError> {
         let tasks: heapless::Vec<_, 5> = tasks
             .iter()
             .map(|desc| {
@@ -52,6 +53,7 @@ impl Kernel {
                     desc.init_stack_size,
                     Vec::from_slice(&[desc.stack_space.clone()]).unwrap(),
                     Vec::default(),
+                    // Safety: entrypoints are static in k5 currently, so this is safe
                     unsafe { TaskPtr::from_raw_parts(desc.entrypoint, ()) },
                     false,
                 )
@@ -61,18 +63,19 @@ impl Kernel {
         Ok(kernel)
     }
 
-    pub fn new(tasks: Vec<Task, 5>) -> Result<Self, KernelError> {
+    pub(crate) fn new(tasks: Vec<Task, 5>) -> Result<Self, KernelError> {
         let current_thread = ThreadTime {
             tcb_ref: ThreadRef(0),
             time: 20,
         };
         let tcbs = Vec::default();
-        let domains = MaybeUninit::<[List<DomainEntry>; PRIORITY_COUNT]>::uninit();
+        const DOMAIN_ENTRY: MaybeUninit<List<DomainEntry>> = MaybeUninit::uninit();
         let mut domains: [MaybeUninit<List<DomainEntry>>; PRIORITY_COUNT] =
-            unsafe { mem::transmute(domains) };
+            [DOMAIN_ENTRY; PRIORITY_COUNT];
         for d in &mut domains {
             d.write(List::new());
         }
+        // Safety: We just initialized every item in the array, so this transmute is safe
         let domains: [List<DomainEntry>; PRIORITY_COUNT] = unsafe { mem::transmute(domains) };
         Ok(Kernel {
             scheduler: Scheduler {
@@ -85,7 +88,7 @@ impl Kernel {
         })
     }
 
-    pub fn spawn_thread(
+    pub(crate) fn spawn_thread(
         &mut self,
         task_ref: TaskRef,
         priority: usize,
@@ -104,13 +107,13 @@ impl Kernel {
         self.scheduler.spawn(tcb)
     }
 
-    pub fn task(&self, task_ref: TaskRef) -> Result<&Task, KernelError> {
+    pub(crate) fn task(&self, task_ref: TaskRef) -> Result<&Task, KernelError> {
         self.tasks
             .get(task_ref.0)
             .ok_or(KernelError::InvalidTaskRef)
     }
 
-    pub fn task_mut(&mut self, task_ref: TaskRef) -> Result<&mut Task, KernelError> {
+    pub(crate) fn task_mut(&mut self, task_ref: TaskRef) -> Result<&mut Task, KernelError> {
         self.tasks
             .get_mut(task_ref.0)
             .ok_or(KernelError::InvalidTaskRef)
@@ -118,7 +121,7 @@ impl Kernel {
 
     /// Sends a message from the current thread to the specified endpoint
     /// This function takes a [`CapabilityRef`] and expects it to be an [`Endpoint`]
-    pub fn send(&mut self, dest: CapabilityRef, msg: Box<[u8]>) -> Result<(), KernelError> {
+    pub(crate) fn send(&mut self, dest: CapabilityRef, msg: Box<[u8]>) -> Result<(), KernelError> {
         let endpoint = self.scheduler.current_thread()?.endpoint(dest)?;
         self.send_inner(endpoint, msg, None)
     }
@@ -257,10 +260,16 @@ impl Kernel {
                 };
                 let msg = Box::from(slice);
                 let cap = CapabilityRef(args.arg3);
-                let out_buf: TaskPtrMut<'_, [u8]> =
-                    unsafe { TaskPtrMut::from_raw_parts(args.arg5, args.arg6 as usize) };
-                let recv_resp: TaskPtrMut<'_, MaybeUninit<RecvResp>> =
-                    unsafe { TaskPtrMut::from_raw_parts(args.arg4, ()) };
+                // Safety: the caller is giving over memory to us, to overwrite
+                // TaskPtrMut ensures that the memory belongs to the correct task
+                let out_buf = unsafe {
+                    TaskPtrMut::<'_, [u8]>::from_raw_parts(args.arg1, args.arg2 as usize)
+                };
+                // Safety: the caller is giving over memory to us, to overwrite
+                // TaskPtrMut ensures that the memory belongs to the correct task
+                let recv_resp = unsafe {
+                    TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(args.arg4, ())
+                };
                 let thread = self.call(cap, msg, out_buf, recv_resp)?;
                 Ok((
                     self.scheduler.switch_thread(thread).map(Some)?,
@@ -271,10 +280,17 @@ impl Kernel {
                 if index.get(SyscallIndex::SYSCALL_ARG_TYPE) == SyscallDataType::Page {
                     todo!()
                 }
-                let mut out_buf: TaskPtrMut<'_, [u8]> =
-                    unsafe { TaskPtrMut::from_raw_parts(args.arg1, args.arg2 as usize) };
-                let mut recv_resp: TaskPtrMut<'_, MaybeUninit<RecvResp>> =
-                    unsafe { TaskPtrMut::from_raw_parts(args.arg4, ()) };
+
+                // Safety: the caller is giving over memory to us, to overwrite
+                // TaskPtrMut ensures that the memory belongs to the correct task
+                let mut out_buf = unsafe {
+                    TaskPtrMut::<'_, [u8]>::from_raw_parts(args.arg1, args.arg2 as usize)
+                };
+                // Safety: the caller is giving over memory to us, to overwrite
+                // TaskPtrMut ensures that the memory belongs to the correct task
+                let mut recv_resp = unsafe {
+                    TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(args.arg4, ())
+                };
 
                 let tcb = self.scheduler.current_thread_mut()?;
                 let task = self
@@ -306,19 +322,20 @@ impl Kernel {
                 // NOTE: this assumes that the internal task index is the same as codegen task index, which is true for embedded,
                 // but for systems with dynamic tasks is not true.
                 buf[2..log_buf.len() + 2].clone_from_slice(log_buf);
-                unsafe { arch::log(&buf[..log_buf.len() + 2]) };
+                arch::log(&buf[..log_buf.len() + 2]);
                 Ok((None, SyscallReturn::new()))
             }
             abi::SyscallFn::Caps => {
-                //TODO(sphw): check length bounds
-                //TODO(sphw): refactor into own func
                 let tcb = self.scheduler.current_thread()?;
-                let slice = unsafe {
-                    core::slice::from_raw_parts_mut(
-                        args.arg1 as *mut CapListEntry,
-                        args.arg2 as usize,
-                    )
+                let task = self.task(tcb.task)?;
+                // Safety: the caller is giving over memory to us, to overwrite
+                // TaskPtrMut ensures that the memory belongs to the correct task
+                let mut slice = unsafe {
+                    TaskPtrMut::<'_, [CapListEntry]>::from_raw_parts(args.arg1, args.arg2)
                 };
+                let slice = task
+                    .validate_mut_ptr(&mut slice)
+                    .ok_or(KernelError::InvalidTaskPtr)?;
                 let len = slice.len().min(tcb.capabilities.len());
                 for (i, entry) in tcb.capabilities.iter().take(len).enumerate() {
                     slice[i] = abi::CapListEntry {
@@ -344,8 +361,9 @@ impl Kernel {
             .tasks
             .get(tcb.task.0)
             .ok_or(KernelError::InvalidTaskRef)?;
-        let slice: TaskPtr<'_, [u8]> =
-            unsafe { TaskPtr::from_raw_parts(args.arg1, args.arg2 as usize) };
+        // Safety: the caller is giving over memory to us, to overwrite
+        // TaskPtrMut ensures that the memory belongs to the correct task
+        let slice = unsafe { TaskPtr::<'_, [u8]>::from_raw_parts(args.arg1, args.arg2 as usize) };
         let slice = if let Some(buf) = task.validate_ptr(slice) {
             buf
         } else {
@@ -510,28 +528,12 @@ impl ExhaustedThread {
         self.tcb_ref
     }
     fn decrement(self: Pin<&mut ExhaustedThread>) -> usize {
-        // Saftey: We never consider this pinned
+        // Safety: We never move the underlying memory, so this is safe
         unsafe {
             let s = self.get_unchecked_mut();
             s.time -= 1;
             s.time
         }
-    }
-}
-
-unsafe impl cordyceps::Linked<list::Links<ExhaustedThread>> for ExhaustedThread {
-    type Handle = Pin<Box<Self>>;
-
-    fn into_ptr(r: Self::Handle) -> core::ptr::NonNull<Self> {
-        unsafe { NonNull::from(Box::leak(Pin::into_inner_unchecked(r))) }
-    }
-
-    unsafe fn from_ptr(ptr: core::ptr::NonNull<Self>) -> Self::Handle {
-        Pin::new_unchecked(Box::from_raw(ptr.as_ptr()))
-    }
-
-    unsafe fn links(target: core::ptr::NonNull<Self>) -> core::ptr::NonNull<list::Links<Self>> {
-        target.cast()
     }
 }
 
@@ -739,17 +741,15 @@ impl Task {
         &self,
         ptr: TaskPtr<'a, T>,
     ) -> Option<&'a T> {
-        unsafe {
-            ptr.validate(&self.ram_memory_region)
-                .or_else(|| ptr.validate(&self.flash_memory_region))
-        }
+        ptr.validate(&self.ram_memory_region)
+            .or_else(|| ptr.validate(&self.flash_memory_region))
     }
 
     fn validate_mut_ptr<'a, 'r, T: core::ptr::Pointee + ?Sized>(
         &self,
         ptr: &'r mut TaskPtrMut<'a, T>,
     ) -> Option<&'r mut T> {
-        unsafe { ptr.validate(&self.ram_memory_region, &self.flash_memory_region) }
+        ptr.validate(&self.ram_memory_region, &self.flash_memory_region)
     }
 
     fn alloc_stack(&mut self) -> Option<usize> {
@@ -800,10 +800,12 @@ pub struct IPCMsgInner {
 
 macro_rules! linked_impl {
     ($t: ty) => {
+        // Safety: there a few safety guarantees outlined in [`cordyceps::Linked`], we uphold all of those
         unsafe impl cordyceps::Linked<list::Links<$t>> for $t {
             type Handle = Pin<Box<Self>>;
 
             fn into_ptr(r: Self::Handle) -> core::ptr::NonNull<Self> {
+                // Safety: this is safe, as long as only cordyceps uses `into_ptr`
                 unsafe { NonNull::from(Box::leak(Pin::into_inner_unchecked(r))) }
             }
 
@@ -823,6 +825,7 @@ macro_rules! linked_impl {
 linked_impl! {IPCMsg }
 linked_impl! { DomainEntry }
 linked_impl! { CapEntry }
+linked_impl! { ExhaustedThread }
 
 pub struct TaskDesc {
     pub name: &'static str,

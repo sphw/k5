@@ -9,9 +9,9 @@ pub struct KernelBuilder<'a> {
 }
 
 impl KernelBuilder<'_> {
-    pub fn new<'a>(tasks: &'a [TaskDesc]) -> Self {
+    pub fn new(tasks: &[TaskDesc]) -> Self {
         assert!(
-            tasks.len() > 0,
+            !tasks.is_empty(),
             "must have at least one task to start kernel"
         );
         Self {
@@ -84,7 +84,8 @@ pub struct ThreadBuilder {
 impl ThreadBuilder {
     /// Creates a new thread builder from a task index
     ///
-    /// Safety: The index you pass in should be a valid thread_ref, this type is usually created by the codegen module
+    /// # Safety
+    /// The index you pass in should be a valid thread_ref, this type is usually created by the codegen module
     /// This isn't truley "unsafe", but is marked as such to discourage use
     pub const unsafe fn new(index: usize) -> Self {
         Self {

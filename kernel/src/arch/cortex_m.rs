@@ -21,6 +21,7 @@ static mut KERNEL: MaybeUninit<Kernel> = MaybeUninit::uninit();
 static mut CURRENT_TCB: AtomicPtr<TCB> = AtomicPtr::new(ptr::null_mut());
 
 pub fn init_kernel<'k, 't>(tasks: &'t [TaskDesc]) -> &'k mut Kernel {
+    // Safety: this is all unsafe due to the use of static mut, but its a kernel so watcha gonna do
     unsafe {
         if KERNEL_INIT.load(Ordering::SeqCst) {
             panic!("kernel already inited");
@@ -43,10 +44,13 @@ unsafe fn current_tcb() -> *mut TCB {
 }
 
 unsafe fn set_current_tcb(task: &TCB) {
-    CURRENT_TCB.store(mem::transmute(task), Ordering::SeqCst);
+    CURRENT_TCB.store(task as *const TCB as *mut TCB, Ordering::SeqCst);
 }
 
 pub fn start_root_task(task: &TCB) -> ! {
+    // Safety: start root ask is only called once when the kernel is initialized
+    // This is marked unsafe, since it could allow an invalid pointer being saved to global state
+    // TCB's locations are stable since they are stored in the `KERNEL` global, and we currently never remove them
     unsafe {
         set_current_tcb(task);
     }
@@ -54,6 +58,10 @@ pub fn start_root_task(task: &TCB) -> ! {
     let mut p = cortex_m::Peripherals::take().unwrap();
 
     // set systick to lowest priority, so it won't interrupt the kernel
+    //
+    // Safety: this operation is basically safe, but cortex_m marks it as unsafe,
+    // since if called in an interrupt handler it can lead to some bad side-effects
+    // This whole function is only called once from `main`, so its safe
     unsafe {
         p.SCB.set_priority(SystemHandler::SysTick, 0xff);
     }
@@ -76,6 +84,7 @@ pub fn start_root_task(task: &TCB) -> ! {
     p.SYST.enable_counter();
     p.SYST.enable_interrupt();
 
+    // Safety: we are currently in kernel mode, so setting the psp is safe
     unsafe {
         cortex_m::register::psp::write(task.saved_state.psp as u32);
     }
@@ -86,6 +95,8 @@ pub fn start_root_task(task: &TCB) -> ! {
     // special case in `SVCall`. I don't really like this technique, since it increases the cycle
     // count (and branching) of the syscall handler. This is what FreeRTOS and Hubris both do
     // though, but I'd love to change it.
+    //
+    // Safety: ASM is always unsafe, but this is actually pretty "safe" as it just triggers a syscall
     unsafe {
         asm!("
             ldm {state}, {{r4-r11}}
@@ -99,6 +110,9 @@ pub fn start_root_task(task: &TCB) -> ! {
 pub fn init_tcb_stack(task: &Task, tcb: &mut TCB) {
     let stack_addr = tcb.stack_pointer - mem::size_of::<ExceptionFrame>();
     let mut stack_ptr: TaskPtrMut<ExceptionFrame> =
+    // Safety: We are essentially inventing a lifetime here, but its fine because we are the
+    // kernel and can guarantee that no one else will touch this memory until we say so
+    // side note: I know this is ugly but clippy is being weird about the lint
         unsafe { TaskPtrMut::from_raw_parts(stack_addr, ()) };
     let stack_exc_frame = task
         .validate_mut_ptr(&mut stack_ptr)
@@ -242,7 +256,7 @@ pub unsafe extern "C" fn SysTick() {
          ldm r0!, {{r4-r12, lr}}
          vldm r0, {{s16-s31}}
          msr PSP, r12
-        bx lr
+         bx lr
          ",
         inner = sym systick_inner,
         options(noreturn)
@@ -250,25 +264,32 @@ pub unsafe extern "C" fn SysTick() {
 }
 
 fn systick_inner() {
+    // Safety: This function is only ever called by the SysTick handler, which
+    // can't preempt the kernel, so it is safe for us to access the kernel
     let kernel = unsafe { &mut *kernel() };
     if let Some(tcb_ref) = kernel.scheduler.tick().unwrap() {
+        // Safety: The TCB comes from the kernel which is stored statically so this is safe
         unsafe { set_current_tcb(kernel.scheduler.get_tcb(tcb_ref).unwrap()) }
     }
 }
 
 fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
-    // TODO(sphw): figure out how safe this is,
-    // do we need to copy
+    // Safety: We are safe to access global state due to our interrupt model
     let args = unsafe {
         let tcb = &*CURRENT_TCB.load(Ordering::SeqCst);
         tcb.saved_state.syscall_args()
     };
+    // Safety: We are safe to access global state due to our interrupt model
     let kernel = unsafe { &mut *kernel() };
     let (next_tcb, ret) = kernel.syscall(index, args).unwrap();
+
+    // Safety: We are safe to access global state due to our interrupt model,
+    // plus we have thrown away the immutable reference to CURRENT_TCB above
     let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
     tcb.saved_state.set_syscall_return(ret);
 
     if let Some(tcb_ref) = next_tcb {
+        // Safety: The TCB comes from the kernel which is stored statically so this is safe
         unsafe { set_current_tcb(kernel.scheduler.get_tcb(tcb_ref).unwrap()) }
     }
     ret
@@ -303,8 +324,9 @@ unsafe fn init_log() {
     CHANNEL = Some(channels.up.0);
 }
 
-pub unsafe fn log(bytes: &[u8]) {
-    if let Some(ch) = &mut CHANNEL {
+pub fn log(bytes: &[u8]) {
+    // Safety: the kernel is non-reentrant so we can't get multiple mutable copies of `CHANNEL`
+    if let Some(ch) = unsafe { &mut CHANNEL } {
         ch.write(bytes);
     }
 }

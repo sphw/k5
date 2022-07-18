@@ -12,7 +12,7 @@ impl<'a, T: Pointee + ?Sized> TaskPtr<'a, T> {
         }
     }
 
-    pub unsafe fn validate(&self, range: &Range<usize>) -> Option<&'a T> {
+    pub fn validate(&self, range: &Range<usize>) -> Option<&'a T> {
         let (ptr, _) = (self.ptr as *const T).to_raw_parts();
         let addr = ptr.addr();
         let end = addr + size_of_val(self.ptr);
@@ -32,7 +32,7 @@ impl<'a, T: Pointee + ?Sized> TaskPtrMut<'a, T> {
         }
     }
 
-    pub unsafe fn validate(
+    pub fn validate(
         &mut self,
         ram_range: &Range<usize>,
         flash_range: &Range<usize>,
