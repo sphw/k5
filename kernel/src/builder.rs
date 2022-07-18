@@ -1,4 +1,4 @@
-use abi::{Capability, Endpoint, ThreadRef};
+use abi::{Cap, Endpoint, ThreadRef};
 
 use crate::{Kernel, TaskDesc, TaskRef};
 
@@ -79,7 +79,7 @@ impl KernelBuilder<'_> {
     pub fn endpoint(&mut self, task: ThreadRef, dest: ThreadRef, addr: usize) -> &mut Self {
         let _dest = self.kernel.scheduler.get_tcb(dest).unwrap();
         let task = self.kernel.scheduler.get_tcb_mut(task).unwrap();
-        task.add_cap(Capability::Endpoint(Endpoint {
+        task.add_cap(Cap::Endpoint(Endpoint {
             tcb_ref: dest,
             addr,
         }));

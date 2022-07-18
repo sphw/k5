@@ -1,5 +1,4 @@
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
-#![allow(dead_code)]
 #![warn(clippy::undocumented_unsafe_blocks)]
 #![feature(asm_const)]
 #![feature(asm_sym)]
@@ -18,8 +17,8 @@ pub use builder::*;
 mod tests;
 
 use abi::{
-    CapListEntry, Capability, CapabilityRef, Endpoint, RecvResp, SyscallArgs, SyscallDataType,
-    SyscallIndex, SyscallReturn, SyscallReturnType, ThreadRef,
+    Cap, CapListEntry, CapRef, Endpoint, RecvResp, SyscallArgs, SyscallDataType, SyscallIndex,
+    SyscallReturn, SyscallReturnType, ThreadRef,
 };
 use alloc::boxed::Box;
 use cordyceps::{
@@ -52,7 +51,6 @@ impl Kernel {
                     desc.ram_region.clone(),
                     desc.init_stack_size,
                     Vec::from_slice(&[desc.stack_space.clone()]).unwrap(),
-                    Vec::default(),
                     // Safety: entrypoints are static in k5 currently, so this is safe
                     unsafe { TaskPtr::from_raw_parts(desc.entrypoint, ()) },
                     false,
@@ -120,8 +118,8 @@ impl Kernel {
     }
 
     /// Sends a message from the current thread to the specified endpoint
-    /// This function takes a [`CapabilityRef`] and expects it to be an [`Endpoint`]
-    pub(crate) fn send(&mut self, dest: CapabilityRef, msg: Box<[u8]>) -> Result<(), KernelError> {
+    /// This function takes a [`CapRef`] and expects it to be an [`Endpoint`]
+    pub(crate) fn send(&mut self, dest: CapRef, msg: Box<[u8]>) -> Result<(), KernelError> {
         let endpoint = self.scheduler.current_thread()?.endpoint(dest)?;
         self.send_inner(endpoint, msg, None)
     }
@@ -138,7 +136,7 @@ impl Kernel {
                 reply_endpoint,
                 body,
             }),
-            links: Links::default(),
+            _links: Links::default(),
             addr: endpoint.addr,
         }));
 
@@ -170,7 +168,7 @@ impl Kernel {
     /// received
     pub(crate) fn call(
         &mut self,
-        dest: CapabilityRef,
+        dest: CapRef,
         msg: Box<[u8]>,
         out_buf: TaskPtrMut<'static, [u8]>,
         recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
@@ -229,7 +227,7 @@ impl Kernel {
                     Err(e) => return Err(e),
                 };
                 let msg = Box::from(slice);
-                let cap = CapabilityRef(args.arg3);
+                let cap = CapRef(args.arg3);
                 let priority = tcb.priority;
                 self.send(cap, msg)?;
                 if let Some(thread) = self.scheduler.next_thread(priority) {
@@ -259,7 +257,7 @@ impl Kernel {
                     Err(e) => return Err(e),
                 };
                 let msg = Box::from(slice);
-                let cap = CapabilityRef(args.arg3);
+                let cap = CapRef(args.arg3);
                 // Safety: the caller is giving over memory to us, to overwrite
                 // TaskPtrMut ensures that the memory belongs to the correct task
                 let out_buf = unsafe {
@@ -339,7 +337,7 @@ impl Kernel {
                 let len = slice.len().min(tcb.capabilities.len());
                 for (i, entry) in tcb.capabilities.iter().take(len).enumerate() {
                     slice[i] = abi::CapListEntry {
-                        cap_ref: CapabilityRef((entry as *const CapEntry).addr()),
+                        cap_ref: CapRef((entry as *const CapEntry).addr()),
                         desc: entry.cap.clone(),
                     };
                 }
@@ -461,7 +459,7 @@ impl Scheduler {
             let exhausted_thread = ExhaustedThread {
                 tcb_ref: Some(self.current_thread.tcb_ref),
                 time: current_tcb.cooldown,
-                links: Default::default(),
+                _links: Default::default(),
             };
             self.exhausted_threads
                 .push_front(Box::pin(exhausted_thread));
@@ -518,15 +516,12 @@ impl Scheduler {
 
 #[derive(Default)]
 struct ExhaustedThread {
-    links: Links<ExhaustedThread>,
+    _links: Links<ExhaustedThread>,
     time: usize,
     tcb_ref: Option<ThreadRef>,
 }
 
 impl ExhaustedThread {
-    fn tcb_ref(self: Pin<&mut ExhaustedThread>) -> Option<ThreadRef> {
-        self.tcb_ref
-    }
     fn decrement(self: Pin<&mut ExhaustedThread>) -> usize {
         // Safety: We never move the underlying memory, so this is safe
         unsafe {
@@ -550,7 +545,7 @@ pub enum KernelError {
     InvalidTaskRef,
     InvalidEntrypoint,
     TooManyThreads,
-    InvalidCapabilityRef,
+    InvalidCapRef,
     WrongCapabilityType,
     StackExhausted,
     InvalidTaskPtr,
@@ -599,19 +594,19 @@ impl TCB {
         }
     }
 
-    fn capability(&self, cap_ref: CapabilityRef) -> Result<&Capability, KernelError> {
+    fn capability(&self, cap_ref: CapRef) -> Result<&Cap, KernelError> {
         for c in self.capabilities.iter() {
             let c_addr = (c as *const CapEntry).addr();
             if c_addr == *cap_ref {
                 return Ok(&c.cap);
             }
         }
-        Err(KernelError::InvalidCapabilityRef)
+        Err(KernelError::InvalidCapRef)
     }
 
-    fn endpoint(&self, cap_ref: CapabilityRef) -> Result<Endpoint, KernelError> {
+    fn endpoint(&self, cap_ref: CapRef) -> Result<Endpoint, KernelError> {
         let dest_cap = self.capability(cap_ref)?;
-        let endpoint = if let Capability::Endpoint(endpoint) = dest_cap {
+        let endpoint = if let Cap::Endpoint(endpoint) = dest_cap {
             endpoint
         } else {
             return Err(KernelError::WrongCapabilityType);
@@ -619,9 +614,9 @@ impl TCB {
         Ok(*endpoint)
     }
 
-    pub fn add_cap(&mut self, cap: Capability) {
+    pub fn add_cap(&mut self, cap: Cap) {
         self.capabilities.push_back(Box::pin(CapEntry {
-            links: Links::default(),
+            _links: Links::default(),
             cap,
         }));
     }
@@ -670,9 +665,9 @@ impl TCB {
             inner: abi::RecvRespInner::Copy(inner.body.len()),
         });
         if let Some(reply) = inner.reply_endpoint {
-            self.add_cap(Capability::Endpoint(reply));
+            self.add_cap(Cap::Endpoint(reply));
             let cap_ptr = &*self.capabilities.back().unwrap() as *const CapEntry;
-            recv_resp.cap = Some(CapabilityRef(cap_ptr.addr()));
+            recv_resp.cap = Some(CapRef(cap_ptr.addr()));
         }
         Ok(true)
     }
@@ -680,7 +675,7 @@ impl TCB {
 
 #[derive(Default)]
 pub(crate) struct DomainEntry {
-    links: list::Links<DomainEntry>,
+    _links: list::Links<DomainEntry>,
     tcb_ref: Option<ThreadRef>,
 }
 
@@ -688,7 +683,7 @@ impl DomainEntry {
     pub fn new(tcb_ref: ThreadRef) -> Self {
         Self {
             tcb_ref: Some(tcb_ref),
-            links: Default::default(),
+            _links: Default::default(),
         }
     }
 }
@@ -701,7 +696,6 @@ enum ThreadState {
         recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
     },
     Ready,
-    Running,
 }
 
 #[repr(C)]
@@ -711,7 +705,6 @@ pub(crate) struct Task {
     ram_memory_region: Range<usize>,
     stack_size: usize,
     available_stack_ptr: Vec<Range<usize>, 8>,
-    capabilities: Vec<Capability, 10>,
     pub entrypoint: TaskPtr<'static, fn() -> !>,
     secure: bool,
 }
@@ -722,7 +715,6 @@ impl Task {
         ram_memory_region: Range<usize>,
         stack_size: usize,
         available_stack_ptr: Vec<Range<usize>, 8>,
-        capabilities: Vec<Capability, 10>,
         entrypoint: TaskPtr<'static, fn() -> !>,
         secure: bool,
     ) -> Self {
@@ -731,7 +723,6 @@ impl Task {
             ram_memory_region,
             stack_size,
             available_stack_ptr,
-            capabilities,
             secure,
             entrypoint,
         }
@@ -763,6 +754,7 @@ impl Task {
         None
     }
 
+    #[allow(dead_code)] // when restarting crashed tasks is implemented we will implement this
     fn make_stack_available(&mut self, stack_start: usize) {
         for range in &mut self.available_stack_ptr {
             if range.start == stack_start + self.stack_size {
@@ -781,13 +773,13 @@ impl Task {
 }
 
 struct CapEntry {
-    links: list::Links<CapEntry>,
-    cap: Capability,
+    _links: list::Links<CapEntry>,
+    cap: Cap,
 }
 
 #[derive(Default)]
 pub(crate) struct IPCMsg {
-    links: list::Links<IPCMsg>,
+    _links: list::Links<IPCMsg>,
     addr: usize,
     inner: Option<IPCMsgInner>,
 }

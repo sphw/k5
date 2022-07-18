@@ -38,11 +38,6 @@ unsafe fn kernel() -> *mut Kernel {
     KERNEL.as_mut_ptr()
 }
 
-#[inline]
-unsafe fn current_tcb() -> *mut TCB {
-    CURRENT_TCB.load(Ordering::SeqCst)
-}
-
 unsafe fn set_current_tcb(task: &TCB) {
     CURRENT_TCB.store(task as *const TCB as *mut TCB, Ordering::SeqCst);
 }

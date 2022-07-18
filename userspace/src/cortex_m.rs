@@ -5,8 +5,8 @@ use core::{
 };
 
 use abi::{
-    CapListEntry, CapabilityRef, Error, RecvResp, SyscallArgs, SyscallDataType, SyscallFn,
-    SyscallIndex, SyscallReturn, SyscallReturnType,
+    CapListEntry, CapRef, Error, RecvResp, SyscallArgs, SyscallDataType, SyscallFn, SyscallIndex,
+    SyscallReturn, SyscallReturnType,
 };
 
 #[doc(hidden)]
@@ -85,11 +85,7 @@ unsafe extern "C" fn syscall(index: SyscallIndex, args: &mut SyscallArgs) -> Sys
 }
 
 #[inline]
-fn send_inner<T: ?Sized>(
-    ty: SyscallDataType,
-    capability: CapabilityRef,
-    r: &mut T,
-) -> Result<(), Error> {
+fn send_inner<T: ?Sized>(ty: SyscallDataType, capability: CapRef, r: &mut T) -> Result<(), Error> {
     let size = core::mem::size_of_val(r);
     let (ptr, _) = (r as *mut T).to_raw_parts();
     let addr = ptr.addr();
@@ -116,7 +112,7 @@ fn send_inner<T: ?Sized>(
 #[inline]
 fn call_innner<T: ?Sized>(
     ty: SyscallDataType,
-    capability: CapabilityRef,
+    capability: CapRef,
     r: &mut T,
     out: &mut T,
 ) -> Result<RecvResp, Error> {
@@ -178,7 +174,7 @@ pub trait CapExt {
     fn send<T: ?Sized>(&self, request: &mut T) -> Result<(), Error>;
 }
 
-impl CapExt for CapabilityRef {
+impl CapExt for CapRef {
     fn call<T: ?Sized>(&self, r: &mut T, out_buf: &mut T) -> Result<RecvResp, Error> {
         call_innner(SyscallDataType::Copy, *self, r, out_buf)
     }

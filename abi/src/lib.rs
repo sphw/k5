@@ -165,8 +165,8 @@ impl From<Error> for u8 {
 }
 
 #[derive(Clone, Copy, defmt::Format)]
-pub struct CapabilityRef(pub usize);
-impl Deref for CapabilityRef {
+pub struct CapRef(pub usize);
+impl Deref for CapRef {
     type Target = usize;
 
     fn deref(&self) -> &Self::Target {
@@ -174,15 +174,15 @@ impl Deref for CapabilityRef {
     }
 }
 
-impl From<usize> for CapabilityRef {
+impl From<usize> for CapRef {
     fn from(i: usize) -> Self {
-        CapabilityRef(i)
+        CapRef(i)
     }
 }
 
 #[derive(Clone, defmt::Format)]
 #[repr(C)]
-pub enum Capability {
+pub enum Cap {
     Endpoint(Endpoint),
     Notification,
 }
@@ -214,14 +214,14 @@ impl ThreadRef {
 
 #[derive(Format)]
 pub struct CapListEntry {
-    pub cap_ref: CapabilityRef,
-    pub desc: Capability,
+    pub cap_ref: CapRef,
+    pub desc: Cap,
 }
 
 #[derive(Format)]
 #[repr(C)]
 pub struct RecvResp {
-    pub cap: Option<CapabilityRef>,
+    pub cap: Option<CapRef>,
     pub inner: RecvRespInner,
 }
 
