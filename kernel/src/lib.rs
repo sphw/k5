@@ -195,6 +195,7 @@ impl Kernel {
             out_buf,
             recv_resp,
         };
+
         self.scheduler.wait_current_thread()
     }
 
@@ -688,6 +689,7 @@ impl DomainEntry {
     }
 }
 
+#[repr(C)]
 #[derive(Debug)]
 enum ThreadState {
     Waiting {
@@ -696,6 +698,8 @@ enum ThreadState {
         recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
     },
     Ready,
+    #[allow(dead_code)]
+    Running,
 }
 
 #[repr(C)]
