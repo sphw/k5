@@ -85,7 +85,11 @@ unsafe extern "C" fn syscall(index: SyscallIndex, args: &mut SyscallArgs) -> Sys
 }
 
 #[inline]
-fn send<T: ?Sized>(ty: SyscallDataType, capability: CapabilityRef, r: &mut T) -> Result<(), Error> {
+fn send_inner<T: ?Sized>(
+    ty: SyscallDataType,
+    capability: CapabilityRef,
+    r: &mut T,
+) -> Result<(), Error> {
     let size = core::mem::size_of_val(r);
     let (ptr, _) = (r as *mut T).to_raw_parts();
     let addr = ptr.addr();
@@ -110,7 +114,7 @@ fn send<T: ?Sized>(ty: SyscallDataType, capability: CapabilityRef, r: &mut T) ->
 }
 
 #[inline]
-fn call<T: ?Sized>(
+fn call_innner<T: ?Sized>(
     ty: SyscallDataType,
     capability: CapabilityRef,
     r: &mut T,
@@ -145,7 +149,7 @@ fn call<T: ?Sized>(
 }
 
 #[inline]
-pub fn log(data: &[u8]) -> Result<(), Error> {
+pub(crate) fn log(data: &[u8]) -> Result<(), Error> {
     let (ptr, _) = data.as_ptr().to_raw_parts();
     let addr = ptr.addr();
     let index = SyscallIndex::new()
@@ -167,24 +171,28 @@ pub fn log(data: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn send_page<T: ?Sized>(capability: CapabilityRef, r: &mut T) -> Result<(), Error> {
-    // TODO: statically ensure size / alignment
-    send(SyscallDataType::Page, capability, r)
+pub trait CapExt {
+    /// Sends a request to the capability and waits for a reply
+    fn call<T: ?Sized>(&self, request: &mut T, out_buf: &mut T) -> Result<RecvResp, Error>;
+    /// Sends a request to the capability, and returns ASAP
+    fn send<T: ?Sized>(&self, request: &mut T) -> Result<(), Error>;
 }
 
-pub fn send_copy<T: ?Sized>(capability: CapabilityRef, r: &mut T) -> Result<(), Error> {
-    send(SyscallDataType::Copy, capability, r)
+impl CapExt for CapabilityRef {
+    fn call<T: ?Sized>(&self, r: &mut T, out_buf: &mut T) -> Result<RecvResp, Error> {
+        call_innner(SyscallDataType::Copy, *self, r, out_buf)
+    }
+
+    fn send<T: ?Sized>(&self, r: &mut T) -> Result<(), Error> {
+        send_inner(SyscallDataType::Copy, *self, r)
+    }
 }
 
-pub fn call_copy<T: ?Sized>(
-    capability: CapabilityRef,
-    r: &mut T,
-    out_buf: &mut T,
-) -> Result<RecvResp, Error> {
-    call(SyscallDataType::Copy, capability, r, out_buf)
-}
-
-pub fn recv<T: ?Sized>(addr: u32, r: &mut T) -> Result<abi::RecvResp, Error> {
+/// Receives requests from other threads
+///
+/// This function will block until until another thread sends a request to
+/// the current thread
+pub fn recv<T: ?Sized>(mask: u32, r: &mut T) -> Result<abi::RecvResp, Error> {
     let size = core::mem::size_of_val(r);
     let (ptr, _) = (r as *mut T).to_raw_parts();
     let index = SyscallIndex::new()
@@ -194,7 +202,7 @@ pub fn recv<T: ?Sized>(addr: u32, r: &mut T) -> Result<abi::RecvResp, Error> {
     let mut args = SyscallArgs {
         arg1: ptr.addr(),
         arg2: size,
-        arg3: addr as usize,
+        arg3: mask as usize,
         arg4: resp.as_mut_ptr().addr(),
         ..Default::default()
     };
@@ -231,7 +239,8 @@ impl<T> DerefMut for LoanedPage<T> {
     }
 }
 
-pub fn get_caps() -> Result<CapList, Error> {
+/// Retrieves the tasks current capabilities
+pub fn caps() -> Result<CapList, Error> {
     const ELEM: MaybeUninit<CapListEntry> = MaybeUninit::uninit();
 
     let index = SyscallIndex::new()

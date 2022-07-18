@@ -3,9 +3,11 @@
 #![feature(naked_functions)]
 #![feature(asm_sym)]
 
+use userspace::CapExt;
+
 #[export_name = "main"]
 pub fn main() -> ! {
-    let caps = userspace::get_caps().unwrap();
+    let caps = userspace::caps().unwrap();
     defmt::println!("{:?}", &*caps);
     let mut buf = [0u8; 10];
     loop {
@@ -14,7 +16,7 @@ pub fn main() -> ! {
                 defmt::println!("resp: {:?} buf: {:?}", resp, buf);
                 if let Some(cap) = resp.cap {
                     buf[1..].copy_from_slice(&[0xA; 9]);
-                    if let Err(err) = userspace::send_copy(cap, &mut buf) {
+                    if let Err(err) = cap.send(&mut buf) {
                         defmt::error!("syscall err: {:?}", err);
                     }
                 }

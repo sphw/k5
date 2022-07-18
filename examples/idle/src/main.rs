@@ -4,10 +4,11 @@
 #![feature(asm_sym)]
 
 use defmt::println;
+use userspace::CapExt;
 
 #[export_name = "main"]
 pub fn main() -> ! {
-    let caps = userspace::get_caps().unwrap();
+    let caps = userspace::caps().unwrap();
     println!("{:?}", &*caps);
     let mut a: u32 = 20;
     loop {
@@ -17,7 +18,7 @@ pub fn main() -> ! {
             buf[0..4].copy_from_slice(&a.to_be_bytes());
             println!("send {:?}", buf);
             let mut resp_buf = [0; 10];
-            let resp = userspace::call_copy(caps[0].cap_ref, &mut buf, &mut resp_buf);
+            let resp = caps[0].cap_ref.call(&mut buf, &mut resp_buf);
             println!("resp {:?}, buf: {:?}", resp, resp_buf);
         }
     }
