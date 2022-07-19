@@ -1,5 +1,7 @@
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![warn(clippy::undocumented_unsafe_blocks)]
+#![cfg(test)]
+#![allow(dead_code)]
 #![feature(asm_const)]
 #![feature(asm_sym)]
 #![feature(ptr_metadata)]
@@ -36,13 +38,13 @@ use task_ptr::{TaskPtr, TaskPtrMut};
 
 const PRIORITY_COUNT: usize = 8;
 
-pub(crate) struct Kernel {
+pub struct Kernel {
     pub(crate) scheduler: Scheduler,
     tasks: Vec<Task, 5>,
 }
 
 impl Kernel {
-    pub(crate) fn from_tasks(tasks: &[TaskDesc]) -> Result<Self, KernelError> {
+    pub fn from_tasks(tasks: &[TaskDesc]) -> Result<Self, KernelError> {
         let tasks: heapless::Vec<_, 5> = tasks
             .iter()
             .map(|desc| {
@@ -303,6 +305,8 @@ impl Kernel {
                     let out_buf = unsafe {
                         TaskPtrMut::<'_, [u8]>::from_raw_parts(args.arg1, args.arg2 as usize)
                     };
+                    // Safety: the caller is giving over memory to us, to overwrite
+                    // TaskPtrMut ensures that the memory belongs to the correct task
                     let recv_resp = unsafe {
                         TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(args.arg4, ())
                     };

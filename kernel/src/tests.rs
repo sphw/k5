@@ -128,6 +128,12 @@ fn test_call_schedule() {
         tcb_ref: ThreadRef(1),
         addr: 1,
     }));
+
+    let cap_ref = unsafe {
+        CapRef(
+            (Pin::into_inner_unchecked(b.capabilities.back().unwrap()) as *const CapEntry).addr(),
+        )
+    };
     kernel.scheduler.spawn(a).unwrap();
     kernel.scheduler.spawn(b).unwrap();
     let next = kernel
@@ -145,7 +151,7 @@ fn test_call_schedule() {
     let msg = Box::new([1u8, 2, 3]);
     let next = kernel
         .call(
-            CapRef(0),
+            cap_ref,
             msg,
             unsafe { TaskPtrMut::from_raw_parts(0, 0) },
             unsafe { TaskPtrMut::from_raw_parts(0, ()) },
@@ -164,14 +170,14 @@ fn test_alloc_stack() {
         unsafe { TaskPtr::from_raw_parts(0, ()) },
         false,
     );
-    for i in 0..5 {
+    for i in 1..=5 {
         assert_eq!(task.alloc_stack(), Some(i * 10));
     }
     assert_eq!(task.alloc_stack(), None);
     task.make_stack_available(0);
-    assert_eq!(task.alloc_stack(), Some(0));
-    task.make_stack_available(10);
     assert_eq!(task.alloc_stack(), Some(10));
+    task.make_stack_available(10);
+    assert_eq!(task.alloc_stack(), Some(20));
     task.make_stack_available(40);
-    assert_eq!(task.alloc_stack(), Some(40));
+    assert_eq!(task.alloc_stack(), Some(50));
 }

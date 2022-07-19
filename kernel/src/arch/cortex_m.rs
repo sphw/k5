@@ -333,7 +333,7 @@ pub(crate) fn translate_task_ptr<'a, T: ptr::Pointee + ?Sized>(
         &task.ram_memory_region,
         &task.flash_memory_region,
     )
-    .then(|| r)
+    .then_some(r)
 }
 
 pub(crate) fn translate_mut_task_ptr<'a, T: ptr::Pointee + ?Sized>(
@@ -349,7 +349,7 @@ pub(crate) fn translate_mut_task_ptr<'a, T: ptr::Pointee + ?Sized>(
         &task.ram_memory_region,
         &task.flash_memory_region,
     )
-    .then(|| r)
+    .then_some(r)
 }
 
 fn validate_addr(
