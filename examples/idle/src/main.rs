@@ -3,7 +3,7 @@
 #![feature(naked_functions)]
 #![feature(asm_sym)]
 
-use defmt::println;
+use defmt::{error, info, println, trace, warn};
 use userspace::CapExt;
 
 #[export_name = "main"]
@@ -16,10 +16,10 @@ pub fn main() -> ! {
         if a % 5000 == 0 {
             let mut buf = [0xFFu8; 10];
             buf[0..4].copy_from_slice(&a.to_be_bytes());
-            println!("send {:?}", buf);
+            info!("send {:?}", buf);
             let mut resp_buf = [0; 10];
             let resp = caps[0].cap_ref.call(&mut buf, &mut resp_buf);
-            println!("resp {:?}, buf: {:?}", resp, resp_buf);
+            info!("resp {:?}, buf: {:?}", resp, resp_buf);
         }
     }
 }

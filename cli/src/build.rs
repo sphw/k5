@@ -12,7 +12,6 @@
 ///! RISC-V and ARM-V7M are next on the docket.
 use cargo_metadata::Message;
 use color_eyre::{eyre::anyhow, Result};
-use colored::Colorize;
 use goblin::{elf64::program_header::PT_LOAD, Object};
 use serde::Deserialize;
 use std::{
@@ -206,7 +205,7 @@ impl Config {
 
 impl Kernel {
     fn build(&self, flash: u32, ram: u32, tasks: Vec<codegen::Task>) -> Result<PathBuf> {
-        println!("{}", "Building kernel".bold().green());
+        crate::print_header("Building kernel");
         let target_dir = self.crate_path.join("target");
         fs::create_dir_all(&target_dir)?;
         let kern_loc = TaskLoc {
@@ -241,7 +240,8 @@ fn build_crate(crate_path: &Path, relocate: bool, task_list: Option<&Path>) -> R
         .arg("-C")
         .arg("link-arg=-Tlink.x")
         .arg("-L")
-        .arg(format!("{}", target_dir.display()));
+        .arg(format!("{}", target_dir.display()))
+        .env("DEFMT_LOG", "trace");
     if relocate {
         cmd.arg("-C").arg("link-arg=-r");
     };
@@ -292,7 +292,7 @@ impl Task {
     }
 
     fn build(&self) -> Result<PathBuf> {
-        println!("{}", format!("Building {}", self.name).bold().green());
+        crate::print_header(format!("Building {}", self.name));
         let TaskSource::Crate { crate_path } = &self.source;
 
         let target_dir = crate_path.join("target");

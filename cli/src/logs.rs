@@ -44,6 +44,13 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
     let mut elf = fs::File::open(kernel_path)?;
     let mut elf_data = vec![];
     elf.read_to_end(&mut elf_data)?;
+    let task_name_width = config
+        .tasks
+        .iter()
+        .map(|t| t.name.len())
+        .max()
+        .unwrap_or_default()
+        + 2;
     let task_elf_data = config
         .tasks
         .iter()
@@ -93,12 +100,21 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
                 let buf = &read_buf[start..end];
                 let task_id = read_buf[current_pos] as usize;
                 let elf = &task_elfs[task_id];
+                let task = &config.tasks[task_id];
                 let decoder = &mut task_decoders[task_id];
                 decoder.received(buf);
                 loop {
                     match decoder.decode() {
                         Ok(frame) => {
-                            println!("{}", frame.display_message());
+                            println!(
+                                "{}{} {}",
+                                level_string(frame.level()),
+                                format!("{:^fill$}", task.name, fill = task_name_width)
+                                    .bold()
+                                    .white()
+                                    .on_truecolor(0, 142, 245),
+                                frame.display_message()
+                            );
                             if let Some(locs) = &elf.defmt_locations {
                                 let (path, line, module) =
                                     location_info(&frame, locs, &current_dir);
@@ -182,6 +198,20 @@ fn print_location(file: &str, line: u32, module_path: &str) -> io::Result<()> {
     let loc = format!("{}:{}", file, line);
     println!("{}", format!("└─ {} @ {}", mod_path, loc).dimmed());
     Ok(())
+}
+
+fn level_string(level: Option<defmt_parser::Level>) -> colored::ColoredString {
+    use defmt_parser::Level;
+    match level {
+        Some(level) => match level {
+            Level::Debug => " debug ".bold().white().on_truecolor(97, 97, 97),
+            Level::Trace => " trace ".bold().white().on_truecolor(97, 97, 97),
+            Level::Info => " info  ".bold().white().on_truecolor(121, 199, 255),
+            Level::Error => " error ".bold().white().on_red(),
+            Level::Warn => " warn  ".bold().white().on_yellow(),
+        },
+        None => " print ".bold().white().on_truecolor(97, 97, 97),
+    }
 }
 
 fn location_info(

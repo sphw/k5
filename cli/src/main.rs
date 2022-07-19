@@ -5,6 +5,7 @@ use std::{
 
 use clap::Parser;
 use color_eyre::Result;
+use colored::Colorize;
 mod build;
 mod elf;
 mod flash;
@@ -72,4 +73,10 @@ fn parse_config(path: &Path) -> Result<build::Config> {
 
     let config: build::Config = config.try_into()?;
     Ok(config)
+}
+
+fn print_header(text: impl Into<String>) {
+    let text = format!(" {:<20}", text.into());
+    // let mut text: String = " ".to_string() + &text.into();
+    println!("{}", text.bold().white().on_truecolor(255, 118, 40));
 }
