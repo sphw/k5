@@ -3,23 +3,16 @@
 #![feature(naked_functions)]
 #![feature(asm_sym)]
 
-use defmt::{error, info, println, trace, warn};
-use userspace::CapExt;
+use defmt::info;
+use userspace as _;
 
 #[export_name = "main"]
 pub fn main() -> ! {
-    let caps = userspace::caps().unwrap();
-    println!("{:?}", &*caps);
     let mut a: u32 = 20;
     loop {
         a += 1;
-        if a % 5000 == 0 {
-            let mut buf = [0xFFu8; 10];
-            buf[0..4].copy_from_slice(&a.to_be_bytes());
-            info!("send {:?}", buf);
-            let mut resp_buf = [0; 10];
-            let resp = caps[0].cap_ref.call(&mut buf, &mut resp_buf);
-            info!("resp {:?}, buf: {:?}", resp, resp_buf);
+        if a % 500 == 0 {
+            info!("idle")
         }
     }
 }

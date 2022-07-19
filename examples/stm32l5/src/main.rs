@@ -23,9 +23,10 @@ fn main() -> ! {
         crate::ALLOCATOR.init(unsafe { HEAP })
     }
     let mut kernel = kernel::KernelBuilder::new(task_table::TASKS);
-    let idle = kernel.idle_thread(task_table::IDLE);
-    let foo = kernel.thread(task_table::FOO.priority(7).budget(10).cooldown(10));
-    kernel.endpoint(idle, foo, 0);
+    let _idle = kernel.idle_thread(task_table::IDLE);
+    let foo = kernel.thread(task_table::FOO.priority(7).budget(2).cooldown(5));
+    let bar = kernel.thread(task_table::BAR.priority(7).budget(2).cooldown(5));
+    kernel.endpoint(bar, foo, 0);
     kernel.start()
 }
 
