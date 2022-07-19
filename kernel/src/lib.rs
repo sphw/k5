@@ -142,20 +142,20 @@ impl Kernel {
 
         if let ThreadState::Waiting { addr, .. } = dest_tcb.state {
             if addr & endpoint.addr == endpoint.addr {
-                let (mut buf, mut recv_resp) =
-                    if let ThreadState::Waiting {
-                        out_buf, recv_resp, ..
-                    } = core::mem::replace(&mut dest_tcb.state, ThreadState::Ready)
-                    {
-                        (out_buf, recv_resp)
-                    } else {
-                        unreachable!()
-                    };
+                let (buf, recv_resp) = if let ThreadState::Waiting {
+                    out_buf, recv_resp, ..
+                } =
+                    core::mem::replace(&mut dest_tcb.state, ThreadState::Ready)
+                {
+                    (out_buf, recv_resp)
+                } else {
+                    unreachable!()
+                };
                 let task = self
                     .tasks
                     .get(dest_tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
-                assert!(dest_tcb.recv(task, addr, &mut buf, &mut recv_resp)?);
+                assert!(dest_tcb.recv(task, addr, buf, recv_resp)?);
                 let dest_tcb_priority = dest_tcb.priority;
                 self.scheduler
                     .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
@@ -282,12 +282,12 @@ impl Kernel {
 
                 // Safety: the caller is giving over memory to us, to overwrite
                 // TaskPtrMut ensures that the memory belongs to the correct task
-                let mut out_buf = unsafe {
+                let out_buf = unsafe {
                     TaskPtrMut::<'_, [u8]>::from_raw_parts(args.arg1, args.arg2 as usize)
                 };
                 // Safety: the caller is giving over memory to us, to overwrite
                 // TaskPtrMut ensures that the memory belongs to the correct task
-                let mut recv_resp = unsafe {
+                let recv_resp = unsafe {
                     TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(args.arg4, ())
                 };
 
@@ -297,7 +297,16 @@ impl Kernel {
                     .get(tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
                 let mask = args.arg3;
-                if !tcb.recv(task, mask, &mut out_buf, &mut recv_resp)? {
+                if !tcb.recv(task, mask, out_buf, recv_resp)? {
+                    // Safety: the caller is giving over memory to us, to overwrite
+                    // TaskPtrMut ensures that the memory belongs to the correct task
+                    let out_buf = unsafe {
+                        TaskPtrMut::<'_, [u8]>::from_raw_parts(args.arg1, args.arg2 as usize)
+                    };
+                    let recv_resp = unsafe {
+                        TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(args.arg4, ())
+                    };
+
                     Ok((
                         Some(self.wait(mask as usize, out_buf, recv_resp)?),
                         SyscallReturn::new(),
@@ -329,11 +338,11 @@ impl Kernel {
                 let task = self.task(tcb.task)?;
                 // Safety: the caller is giving over memory to us, to overwrite
                 // TaskPtrMut ensures that the memory belongs to the correct task
-                let mut slice = unsafe {
+                let slice = unsafe {
                     TaskPtrMut::<'_, [CapListEntry]>::from_raw_parts(args.arg1, args.arg2)
                 };
                 let slice = task
-                    .validate_mut_ptr(&mut slice)
+                    .validate_mut_ptr(slice)
                     .ok_or(KernelError::InvalidTaskPtr)?;
                 let len = slice.len().min(tcb.capabilities.len());
                 for (i, entry) in tcb.capabilities.iter().take(len).enumerate() {
@@ -626,8 +635,8 @@ impl TCB {
         &mut self,
         task: &Task,
         mask: usize,
-        out_buf: &mut TaskPtrMut<'_, [u8]>,
-        recv_resp: &mut TaskPtrMut<'_, MaybeUninit<RecvResp>>,
+        out_buf: TaskPtrMut<'_, [u8]>,
+        recv_resp: TaskPtrMut<'_, MaybeUninit<RecvResp>>,
     ) -> Result<bool, KernelError> {
         let mut cursor = self.req_queue.cursor_front_mut();
         cursor.move_prev();
@@ -736,18 +745,17 @@ impl Task {
         &self,
         ptr: TaskPtr<'a, T>,
     ) -> Option<&'a T> {
-        ptr.validate(&self.ram_memory_region)
-            .or_else(|| ptr.validate(&self.flash_memory_region))
+        arch::translate_task_ptr(ptr, self)
     }
 
-    fn validate_mut_ptr<'a, 'r, T: core::ptr::Pointee + ?Sized>(
+    fn validate_mut_ptr<'a, T: core::ptr::Pointee + ?Sized>(
         &self,
-        ptr: &'r mut TaskPtrMut<'a, T>,
-    ) -> Option<&'r mut T> {
-        ptr.validate(&self.ram_memory_region, &self.flash_memory_region)
+        ptr: TaskPtrMut<'a, T>,
+    ) -> Option<&'a mut T> {
+        arch::translate_mut_task_ptr(ptr, self)
     }
 
-    fn alloc_stack(&mut self) -> Option<usize> {
+    pub(crate) fn alloc_stack(&mut self) -> Option<usize> {
         for range in &mut self.available_stack_ptr {
             if range.len() >= self.stack_size {
                 range.start += self.stack_size;
@@ -758,8 +766,8 @@ impl Task {
         None
     }
 
-    #[allow(dead_code)] // when restarting crashed tasks is implemented we will implement this
-    fn make_stack_available(&mut self, stack_start: usize) {
+    #[allow(dead_code)]
+    pub(crate) fn make_stack_available(&mut self, stack_start: usize) {
         for range in &mut self.available_stack_ptr {
             if range.start == stack_start + self.stack_size {
                 range.start = stack_start;

@@ -1,4 +1,5 @@
 use core::arch::asm;
+use core::ops::Range;
 use core::sync::atomic::AtomicBool;
 use core::{
     mem, ptr,
@@ -10,7 +11,10 @@ use mem::MaybeUninit;
 use abi::{SyscallArgs, SyscallIndex, SyscallReturn};
 use rtt_target::{rtt_init, UpChannel};
 
-use crate::{task_ptr::TaskPtrMut, Kernel, Task, TaskDesc, TCB};
+use crate::{
+    task_ptr::{TaskPtr, TaskPtrMut},
+    Kernel, Task, TaskDesc, TCB,
+};
 
 const INITIAL_PSR: u32 = 1 << 24;
 const EXC_RETURN: u32 = 0xFFFFFFED; //FIXME(sphw): this is only correct on v8m in secure mode
@@ -104,13 +108,13 @@ pub(crate) fn start_root_task(task: &TCB) -> ! {
 
 pub(crate) fn init_tcb_stack(task: &Task, tcb: &mut TCB) {
     let stack_addr = tcb.stack_pointer - mem::size_of::<ExceptionFrame>();
-    let mut stack_ptr: TaskPtrMut<ExceptionFrame> =
+    let stack_ptr: TaskPtrMut<ExceptionFrame> =
     // Safety: We are essentially inventing a lifetime here, but its fine because we are the
     // kernel and can guarantee that no one else will touch this memory until we say so
     // side note: I know this is ugly but clippy is being weird about the lint
         unsafe { TaskPtrMut::from_raw_parts(stack_addr, ()) };
     let stack_exc_frame = task
-        .validate_mut_ptr(&mut stack_ptr)
+        .validate_mut_ptr(stack_ptr)
         .expect("stack pointer not in task memory");
     *stack_exc_frame = ExceptionFrame::default();
     stack_exc_frame.pc = (tcb.entrypoint | 1) as u32;
@@ -314,4 +318,47 @@ pub fn log(bytes: &[u8]) {
     if let Some(ch) = unsafe { &mut CHANNEL } {
         ch.write(bytes);
     }
+}
+
+pub(crate) fn translate_task_ptr<'a, T: ptr::Pointee + ?Sized>(
+    task_ptr: TaskPtr<'a, T>,
+    task: &Task,
+) -> Option<&'a T> {
+    // Safety: We only use return this reference when validated, so this is safe
+    let r = unsafe { task_ptr.ptr() };
+    let (ptr, _) = (r as *const T).to_raw_parts();
+    validate_addr(
+        ptr.addr(),
+        mem::size_of_val(r),
+        &task.ram_memory_region,
+        &task.flash_memory_region,
+    )
+    .then(|| r)
+}
+
+pub(crate) fn translate_mut_task_ptr<'a, T: ptr::Pointee + ?Sized>(
+    task_ptr: TaskPtrMut<'a, T>,
+    task: &Task,
+) -> Option<&'a mut T> {
+    // Safety: We only use return this reference when validated, so this is safe
+    let r = unsafe { task_ptr.ptr() };
+    let (ptr, _) = (r as *mut T).to_raw_parts();
+    validate_addr(
+        ptr.addr(),
+        mem::size_of_val(r),
+        &task.ram_memory_region,
+        &task.flash_memory_region,
+    )
+    .then(|| r)
+}
+
+fn validate_addr(
+    addr: usize,
+    len: usize,
+    ram_range: &Range<usize>,
+    flash_range: &Range<usize>,
+) -> bool {
+    let end = addr + len;
+    (ram_range.contains(&addr) && ram_range.contains(&end))
+        || (flash_range.contains(&addr) && flash_range.contains(&end))
 }

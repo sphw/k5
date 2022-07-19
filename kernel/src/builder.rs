@@ -40,13 +40,14 @@ impl KernelBuilder<'_> {
     pub fn thread(&mut self, thread: ThreadBuilder) -> ThreadRef {
         let task_ref = TaskRef(thread.index);
         let task = self.kernel.task(task_ref).expect("invalid thread index");
+        let entrypoint = task.entrypoint;
         self.kernel
             .spawn_thread(
                 task_ref,
                 thread.priority,
                 thread.budget,
                 thread.cooldown,
-                task.entrypoint,
+                entrypoint,
             )
             .unwrap()
     }
@@ -55,6 +56,7 @@ impl KernelBuilder<'_> {
     pub fn idle_thread(&mut self, thread: ThreadBuilder) -> ThreadRef {
         let task_ref = TaskRef(thread.index);
         let task = self.kernel.task(task_ref).expect("invalid thread index");
+        let entrypoint = task.entrypoint;
         let t = self
             .kernel
             .spawn_thread(
@@ -62,7 +64,7 @@ impl KernelBuilder<'_> {
                 thread.priority,
                 thread.budget,
                 thread.cooldown,
-                task.entrypoint,
+                entrypoint,
             )
             .unwrap();
 
