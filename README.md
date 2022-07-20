@@ -4,6 +4,7 @@
 
 K5 is a very small microkernel based on the L4 family of kernels, but designed with microcontrollers in mind and written in Rust.
 
+
 ## Why
 
 Why in the world does the world need another RTOS / microkernel. There are like half a dozen Rust RTOSes alone (Hubris, Tock, RTIC, MnemOS). There are a couple of good reasons, and a few "bad".
@@ -22,6 +23,11 @@ Right now there is some basic functionality mainly for ARMv8M. There is an examp
 - `./codegen` - Simple code-generation utility to take a list of tasks, and produce Rust
 - `./examples` - Example "apps" for various boards, right now just stm32l5.
 - `./cli` - Contains the `k5` build tool, it supports flashing, building, and printing logs from a k5 app
+
+## Demo
+Here's a quick demo of the logging system, and two tasks sending between each other. You can find this code in `./examples`
+
+[![asciicast](https://asciinema.org/a/509730.svg)](https://asciinema.org/a/509730)
 
 
 ## What's Next
@@ -44,6 +50,7 @@ The order is subject to change based on what I feel is the shiniest object, but 
 ## Name
 
 Ok, so to be honest the name was a happy-ish accident. I needed a random name, and I knew I was building an L4 kernel. So a number and letter sounded nice together. But I now have two nice stories to back up the name. The first is that much like k8s or i18n, the 5 is a stand-in for the rest of the word "kernel". Also, mountains in the Karakoram region of a few countries (I'm not here to create geopolitical conflict), are surveyed starting with K. K5 is Gasherbrum 1, which serves as the inspiration for the logo.
+
 
 ## Credits
 This project owes a lot to seL4 and Hubris OS, both fantastic kernels and resources. The context-switching, syscall code, and build system are heavily inspired by Hubris. The scheduler and IPC system are heavily based on seL4. The logging system is just straight-up defmt, but the RTT block is accessed through the kernel. Huge thanks to the Ferrous systems and the rest of the Rust embedded community, who have helped make embedded development far friendly to work with. 
