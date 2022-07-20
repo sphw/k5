@@ -4,16 +4,14 @@ fn test_kernel() -> Kernel {
     let mut kernel = Kernel::new(
         heapless::Vec::from_slice(&[
             Task::new(
-                0..usize::MAX,
-                0..usize::MAX,
+                RegionTable::default(),
                 100,
                 Vec::from_slice(&[0..200]).unwrap(),
                 unsafe { TaskPtr::from_raw_parts(1, ()) },
                 false,
             ),
             Task::new(
-                0..usize::MAX,
-                0..usize::MAX,
+                RegionTable::default(),
                 100,
                 Vec::from_slice(&[0..200]).unwrap(),
                 unsafe { TaskPtr::from_raw_parts(1, ()) },
@@ -163,8 +161,7 @@ fn test_call_schedule() {
 #[test]
 fn test_alloc_stack() {
     let mut task = Task::new(
-        0..1,
-        0..1,
+        RegionTable::default(),
         10,
         Vec::from_slice(&[0..50]).unwrap(),
         unsafe { TaskPtr::from_raw_parts(0, ()) },

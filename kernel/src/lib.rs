@@ -1,7 +1,6 @@
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![warn(clippy::undocumented_unsafe_blocks)]
-#![cfg(test)]
-#![allow(dead_code)]
+#![cfg_attr(test, allow(dead_code))]
 #![feature(asm_const)]
 #![feature(asm_sym)]
 #![feature(ptr_metadata)]
@@ -14,6 +13,7 @@ mod arch;
 mod task_ptr;
 
 mod builder;
+mod regions;
 pub use builder::*;
 #[cfg(test)]
 mod tests;
@@ -34,6 +34,7 @@ use core::{
     ptr::NonNull,
 };
 use heapless::Vec;
+use regions::{Region, RegionAttr, RegionTable};
 use task_ptr::{TaskPtr, TaskPtrMut};
 
 const PRIORITY_COUNT: usize = 8;
@@ -49,8 +50,7 @@ impl Kernel {
             .iter()
             .map(|desc| {
                 Task::new(
-                    desc.flash_region.clone(),
-                    desc.ram_region.clone(),
+                    desc.region_table(),
                     desc.init_stack_size,
                     Vec::from_slice(&[desc.stack_space.clone()]).unwrap(),
                     // Safety: entrypoints are static in k5 currently, so this is safe
@@ -208,7 +208,8 @@ impl Kernel {
             .unwrap()
             .unwrap_or(self.scheduler.current_thread.tcb_ref);
         let tcb = self.scheduler.get_tcb(tcb_ref).unwrap();
-        arch::start_root_task(tcb);
+        let task = self.task(tcb.task).unwrap();
+        arch::start_root_task(task, tcb);
     }
 
     pub(crate) fn syscall(
@@ -718,8 +719,7 @@ enum ThreadState {
 #[repr(C)]
 #[derive(Clone)]
 pub(crate) struct Task {
-    flash_memory_region: Range<usize>,
-    ram_memory_region: Range<usize>,
+    region_table: RegionTable,
     stack_size: usize,
     available_stack_ptr: Vec<Range<usize>, 8>,
     pub entrypoint: TaskPtr<'static, fn() -> !>,
@@ -728,16 +728,14 @@ pub(crate) struct Task {
 
 impl Task {
     pub fn new(
-        flash_memory_region: Range<usize>,
-        ram_memory_region: Range<usize>,
+        region_table: RegionTable,
         stack_size: usize,
         available_stack_ptr: Vec<Range<usize>, 8>,
         entrypoint: TaskPtr<'static, fn() -> !>,
         secure: bool,
     ) -> Self {
         Self {
-            flash_memory_region,
-            ram_memory_region,
+            region_table,
             stack_size,
             available_stack_ptr,
             secure,
@@ -842,4 +840,23 @@ pub struct TaskDesc {
     pub init_stack_size: usize,
     pub flash_region: Range<usize>,
     pub ram_region: Range<usize>,
+}
+
+impl TaskDesc {
+    fn region_table(&self) -> RegionTable {
+        let table = RegionTable {
+            regions: Vec::from_slice(&[
+                Region {
+                    range: self.flash_region.clone(),
+                    attr: RegionAttr::Exec | RegionAttr::Write | RegionAttr::Read,
+                },
+                Region {
+                    range: self.ram_region.clone(),
+                    attr: RegionAttr::Exec | RegionAttr::Write | RegionAttr::Read,
+                },
+            ])
+            .unwrap(),
+        };
+        table
+    }
 }

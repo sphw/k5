@@ -1,7 +1,7 @@
 use crate::task_ptr::{TaskPtr, TaskPtrMut};
 use crate::{Task, TCB};
 
-pub(crate) fn start_root_task(_tcb: &TCB) -> ! {
+pub(crate) fn start_root_task(_task: &Task, _tcb: &TCB) -> ! {
     loop {
         std::thread::sleep(std::time::Duration::from_secs(100));
     }

@@ -17,6 +17,7 @@ cortex-m = "0.7"
 cordyceps = { version = "0.3", features = ["no-cache-pad"]}
 heapless = "0.7"
 rtt-target = { git = "https://github.com/mvirkkunen/rtt-target.git", features = ["cortex-m"], optional =true }
+enumflags2 = "0.7"
 
 [build-dependencies]
 codegen = { path =  "../codegen" }

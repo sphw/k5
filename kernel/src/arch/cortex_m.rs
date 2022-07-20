@@ -1,5 +1,4 @@
 use core::arch::asm;
-use core::ops::Range;
 use core::sync::atomic::AtomicBool;
 use core::{
     mem, ptr,
@@ -12,6 +11,7 @@ use abi::{SyscallArgs, SyscallIndex, SyscallReturn};
 use rtt_target::{rtt_init, UpChannel};
 
 use crate::{
+    regions::{Region, RegionAttr, RegionTable},
     task_ptr::{TaskPtr, TaskPtrMut},
     Kernel, Task, TaskDesc, TCB,
 };
@@ -46,12 +46,13 @@ unsafe fn set_current_tcb(task: &TCB) {
     CURRENT_TCB.store(task as *const TCB as *mut TCB, Ordering::SeqCst);
 }
 
-pub(crate) fn start_root_task(task: &TCB) -> ! {
+pub(crate) fn start_root_task(task: &Task, tcb: &TCB) -> ! {
+    apply_region_table(&task.region_table);
     // Safety: start root ask is only called once when the kernel is initialized
     // This is marked unsafe, since it could allow an invalid pointer being saved to global state
     // TCB's locations are stable since they are stored in the `KERNEL` global, and we currently never remove them
     unsafe {
-        set_current_tcb(task);
+        set_current_tcb(tcb);
     }
 
     let mut p = cortex_m::Peripherals::take().unwrap();
@@ -83,9 +84,23 @@ pub(crate) fn start_root_task(task: &TCB) -> ! {
     p.SYST.enable_counter();
     p.SYST.enable_interrupt();
 
+    let mpu = unsafe {
+        // At least by not taking a &mut we're confident we're not violating
+        // aliasing....
+        &*cortex_m::peripheral::MPU::PTR
+    };
+
+    const ENABLE: u32 = 0b001;
+    const PRIVDEFENA: u32 = 0b100;
+    // Safety: this has no memory safety implications. The worst it can do is
+    // cause us to fault, which is safe. The register API doesn't know this.
+    unsafe {
+        mpu.ctrl.write(ENABLE | PRIVDEFENA);
+    }
+
     // Safety: we are currently in kernel mode, so setting the psp is safe
     unsafe {
-        cortex_m::register::psp::write(task.saved_state.psp as u32);
+        cortex_m::register::psp::write(tcb.saved_state.psp as u32);
     }
 
     // The goal here is to jump to our task in unprivelleged mode,
@@ -100,7 +115,7 @@ pub(crate) fn start_root_task(task: &TCB) -> ! {
         asm!("
             ldm {state}, {{r4-r11}}
             svc #0xFF
-            ", state = in(reg) &task.saved_state.r4,
+            ", state = in(reg) &tcb.saved_state.r4,
             options(noreturn)
         )
     }
@@ -267,8 +282,11 @@ fn systick_inner() {
     // can't preempt the kernel, so it is safe for us to access the kernel
     let kernel = unsafe { &mut *kernel() };
     if let Some(tcb_ref) = kernel.scheduler.tick().unwrap() {
+        let tcb = kernel.scheduler.get_tcb(tcb_ref).unwrap();
+        let task = kernel.task(tcb.task).unwrap();
+        apply_region_table(&task.region_table);
         // Safety: The TCB comes from the kernel which is stored statically so this is safe
-        unsafe { set_current_tcb(kernel.scheduler.get_tcb(tcb_ref).unwrap()) }
+        unsafe { set_current_tcb(tcb) }
     }
 }
 
@@ -288,10 +306,129 @@ fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
     tcb.saved_state.set_syscall_return(ret);
 
     if let Some(tcb_ref) = next_tcb {
+        let tcb = kernel.scheduler.get_tcb(tcb_ref).unwrap();
+        let task = kernel.task(tcb.task).unwrap();
+        apply_region_table(&task.region_table);
         // Safety: The TCB comes from the kernel which is stored statically so this is safe
-        unsafe { set_current_tcb(kernel.scheduler.get_tcb(tcb_ref).unwrap()) }
+        unsafe { set_current_tcb(tcb) }
     }
     ret
+}
+
+pub(crate) fn translate_task_ptr<'a, T: ptr::Pointee + ?Sized>(
+    task_ptr: TaskPtr<'a, T>,
+    task: &Task,
+) -> Option<&'a T> {
+    // Safety: We only use return this reference when validated, so this is safe
+    let r = unsafe { task_ptr.ptr() };
+    let (ptr, _) = (r as *const T).to_raw_parts();
+    validate_addr(ptr.addr(), mem::size_of_val(r), &task.region_table.regions).then_some(r)
+}
+
+pub(crate) fn translate_mut_task_ptr<'a, T: ptr::Pointee + ?Sized>(
+    task_ptr: TaskPtrMut<'a, T>,
+    task: &Task,
+) -> Option<&'a mut T> {
+    // Safety: We only use return this reference when validated, so this is safe
+    let r = unsafe { task_ptr.ptr() };
+    let (ptr, _) = (r as *mut T).to_raw_parts();
+    validate_addr(ptr.addr(), mem::size_of_val(r), &task.region_table.regions).then_some(r)
+}
+
+fn validate_addr(addr: usize, len: usize, regions: &[Region]) -> bool {
+    let end = addr + len;
+    regions.iter().any(|r| {
+        r.range.contains(&addr) && r.range.contains(&end) && r.attr.contains(RegionAttr::Read)
+    })
+}
+
+fn apply_region_table(table: &RegionTable) {
+    const DISABLE: u32 = 0b000;
+    const PRIVDEFENA: u32 = 0b100;
+    let mpu = unsafe { &*cortex_m::peripheral::MPU::PTR };
+    unsafe {
+        cortex_m::asm::dmb();
+        mpu.ctrl.write(DISABLE | PRIVDEFENA);
+    }
+
+    for (i, region) in table.regions.iter().enumerate() {
+        apply_region(i, region, mpu);
+    }
+
+    unsafe {
+        const ENABLE: u32 = 0b001;
+        const PRIVDEFENA: u32 = 0b100;
+        mpu.ctrl.write(ENABLE | PRIVDEFENA);
+        // From the ARMv8m MPU manual
+        //
+        // The final step is to enable the MPU by writing to MPU_CTRL. Code
+        // should then execute a memory barrier to ensure that the register
+        // updates are seen by any subsequent memory accesses. An Instruction
+        // Synchronization Barrier (ISB) ensures the updated configuration
+        // [is] used by any subsequent instructions.
+        cortex_m::asm::dmb();
+        cortex_m::asm::isb();
+    }
+}
+
+fn apply_region(i: usize, region: &Region, mpu: &cortex_m::peripheral::mpu::RegisterBlock) {
+    let ap = if region.attr.contains(RegionAttr::Write) {
+        0b01
+    } else if region.attr.contains(RegionAttr::Read) {
+        0b11
+    } else {
+        0b00
+    };
+    // the mair register stores the memory type of our region,
+    // broadly readablity, writeability, cache coherency, and which
+    // buses can access the memory. Executability is defined elswhere
+    let (mair, sh) = if region.attr.contains(RegionAttr::Device) {
+        // device memory is used for peripherals.
+        // we use outer shareable, so the region can be used for DMA if
+        // neccesary
+        (0b00000000, 0b10)
+    } else if region.attr.contains(RegionAttr::Dma) {
+        // dma requires an outersharable region. We also
+        // specify that DMA memory will not be cached
+        (0b01000100, 0b10)
+    } else {
+        let rw = u32::from(region.attr.contains(RegionAttr::Read)) << 1
+            | u32::from(region.attr.contains(RegionAttr::Write));
+        // write-back transient, not shared
+        (0b0100_0100 | rw | rw << 4, 0b00)
+    };
+
+    // start of memory region
+    let rbar = (!region.attr.contains(RegionAttr::Exec)  as u32)
+            | ap << 1
+            | (sh as u32) << 3  // sharability
+            | (region.range.start as u32);
+    // end of memory region
+    let rlar = (region.range.end as u32)
+                | (i as u32) << 1 // AttrIndx
+                | (1 << 0); // enable
+
+    let rnr = i as u32;
+    unsafe {
+        mpu.rnr.write(rnr);
+    }
+    if rnr < 4 {
+        let mut mair0 = mpu.mair[0].read();
+        mair0 |= (mair as u32) << (rnr * 8);
+        unsafe {
+            mpu.mair[0].write(mair0);
+        }
+    } else {
+        let mut mair1 = mpu.mair[1].read();
+        mair1 |= (mair as u32) << ((rnr - 4) * 8);
+        unsafe {
+            mpu.mair[1].write(mair1);
+        }
+    }
+    unsafe {
+        mpu.rbar.write(rbar);
+        mpu.rlar.write(rlar);
+    }
 }
 
 // RTT
@@ -318,47 +455,4 @@ pub fn log(bytes: &[u8]) {
     if let Some(ch) = unsafe { &mut CHANNEL } {
         ch.write(bytes);
     }
-}
-
-pub(crate) fn translate_task_ptr<'a, T: ptr::Pointee + ?Sized>(
-    task_ptr: TaskPtr<'a, T>,
-    task: &Task,
-) -> Option<&'a T> {
-    // Safety: We only use return this reference when validated, so this is safe
-    let r = unsafe { task_ptr.ptr() };
-    let (ptr, _) = (r as *const T).to_raw_parts();
-    validate_addr(
-        ptr.addr(),
-        mem::size_of_val(r),
-        &task.ram_memory_region,
-        &task.flash_memory_region,
-    )
-    .then_some(r)
-}
-
-pub(crate) fn translate_mut_task_ptr<'a, T: ptr::Pointee + ?Sized>(
-    task_ptr: TaskPtrMut<'a, T>,
-    task: &Task,
-) -> Option<&'a mut T> {
-    // Safety: We only use return this reference when validated, so this is safe
-    let r = unsafe { task_ptr.ptr() };
-    let (ptr, _) = (r as *mut T).to_raw_parts();
-    validate_addr(
-        ptr.addr(),
-        mem::size_of_val(r),
-        &task.ram_memory_region,
-        &task.flash_memory_region,
-    )
-    .then_some(r)
-}
-
-fn validate_addr(
-    addr: usize,
-    len: usize,
-    ram_range: &Range<usize>,
-    flash_range: &Range<usize>,
-) -> bool {
-    let end = addr + len;
-    (ram_range.contains(&addr) && ram_range.contains(&end))
-        || (flash_range.contains(&addr) && flash_range.contains(&end))
 }
