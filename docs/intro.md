@@ -1,4 +1,7 @@
-<img src = "./docs/static/img/logo.png" width="200px"/>
+---
+sidebar_position: 1
+slug: /
+---
 
 # K5 Microkernel
 
