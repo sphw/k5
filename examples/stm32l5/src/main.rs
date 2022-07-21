@@ -7,6 +7,7 @@ extern crate alloc;
 use alloc_cortex_m::CortexMHeap;
 use core::{mem::MaybeUninit, panic::PanicInfo};
 use cortex_m_rt::entry;
+use defmt::info;
 
 kernel::include_task_table! {}
 
@@ -27,6 +28,7 @@ fn main() -> ! {
     let foo = kernel.thread(task_table::FOO.priority(7).budget(2).cooldown(5));
     let bar = kernel.thread(task_table::BAR.priority(7).budget(2).cooldown(5));
     kernel.endpoint(bar, foo, 0);
+    info!("booting");
     kernel.start()
 }
 

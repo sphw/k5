@@ -10,10 +10,11 @@
 extern crate alloc;
 
 mod arch;
+mod builder;
+mod defmt_log;
+mod regions;
 mod task_ptr;
 
-mod builder;
-mod regions;
 pub use builder::*;
 #[cfg(test)]
 mod tests;
@@ -329,13 +330,7 @@ impl Kernel {
                     }
                     Err(e) => return Err(e),
                 };
-                let mut buf = [0u8; 257];
-                buf[0] = tcb.task.0 as u8;
-                buf[1] = log_buf.len() as u8;
-                // NOTE: this assumes that the internal task index is the same as codegen task index, which is true for embedded,
-                // but for systems with dynamic tasks is not true.
-                buf[2..log_buf.len() + 2].clone_from_slice(log_buf);
-                arch::log(&buf[..log_buf.len() + 2]);
+                crate::defmt_log::log(tcb.task.0 as u8 + 1, log_buf);
                 Ok((None, SyscallReturn::new()))
             }
             abi::SyscallFn::Caps => {
