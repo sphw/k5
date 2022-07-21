@@ -1,4 +1,4 @@
-<img src = "./docs/assets/logo.png" width="200px"/>
+<img src = "./docs/static/img/logo.png" width="200px"/>
 
 # K5 Microkernel
 
