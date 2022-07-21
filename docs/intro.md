@@ -5,55 +5,45 @@ slug: /
 
 # K5 Microkernel
 
-K5 is a very small microkernel based on the L4 family of kernels, but designed with microcontrollers in mind and written in Rust.
+K5 is a small microkernel closely related to the L4 family. It's niche is in embedded systems that need some element of security and/or safety guarenetee. Think industrial equipment, or secure elements. It currently runs on ARMv8m microcontrollers, and is being tested on the STM32L56. Eventually we plan to port K5 to other the other Cortex-M versions and RISC-V. 
 
+## Getting Started
 
-## Why
+### Install CLI
+The easiest way is by running 
+```sh
+cargo install --git https://github.com/sphw/k5.git --bins k5
+```
 
-Why in the world does the world need another RTOS / microkernel. There are like half a dozen Rust RTOSes alone (Hubris, Tock, RTIC, MnemOS). There are a couple of good reasons, and a few "bad".
+### STM32L5 Example
 
-Let's start with the good. The largest reason is that this is a capability-based microkernel. K5 most closely mimics seL4 in its design. seL4 uses a concept called capabilities as access control for IPC. The K5 scheduler is also based on seL4's MCS, though with some differences. Like seL4, but unlike many existing Rust RTOSes, K5 is *meant* to be formally verified. This is not done yet but is a primary goal of the kernel. The last major feature that differentiates K5 is that it is designed with support for enclaves, as first-class citizens. I am not aware of any existing RTOS that supports scheduling TrustZone-M and RISC-V PMP enclaves natively. 
-
-Now let's discuss the "bad" reasons. I've always been fascinated by kernel development, and have long wanted to try it out for myself. Of course, I could have just contributed to an existing kernel, but that wouldn't be as fun. 
-
-## What
-Right now there is some basic functionality mainly for ARMv8M. There is an example project for the STM32L5, though it *should* work on any v8m CPU with a little modification. You can send and receive messages between threads, the scheduler will pre-empt your tasks at set intervals, and there is a built-in logging framework using defmt.
-
-### Dir Layout
-- `./kernel` - Contains the kernel as a library that will be used by a host application
-- `./userspace` - The userspace library, contains functions for syscalls, startup, and logging
-- `./abi` - The ABI (application binary interface) includes shared data structures between the kernel and userspace
-- `./codegen` - Simple code-generation utility to take a list of tasks, and produce Rust
-- `./examples` - Example "apps" for various boards, right now just stm32l5.
-- `./cli` - Contains the `k5` build tool, it supports flashing, building, and printing logs from a k5 app
-
-## Demo
-Here's a quick demo of the logging system, and two tasks sending between each other. You can find this code in `./examples`
+Then go to `./examples/stm32l5` and run `k5 logs`. If everything goes right you should see something like below.
 
 [![asciicast](https://asciinema.org/a/509730.svg)](https://asciinema.org/a/509730)
 
+## Goals
+#### Small readable code-base.
 
-## What's Next
+A primary goal of this project is to create an approchable microkernel. The more people can read and fully understand the code in K5, the less bugs there will be.
 
-I've got plans! So so many plans... Basically, I think the order of tasks will be as follows
-- [x] Finish the initial set of syscalls (recv, call, send, logs, caps)
-- [x] Write MPU region solver and add MPU support for Cortex-M
-- [x] Make the UX better for the kernel's APIs. Basically, make starting the kernel and threads easier.
-- [ ] Support peripherals and interrupts
-- [ ] Recover from panics and hard faults in tasks
-- [ ] Document both the code and the design choices of the project
-- [ ] Attempt to use Kani or Creusot to verify the base scheduler
-- [ ] Port to RISC-V?
-- [ ] Add support for building and using TZ / PMP enclave tasks
-- [ ] Investigate porting to MMU-based systems
+#### First-class developer experience
+Embedded development is quite a mixed bag of tooling, some good, some terrible. K5's goal is to make every supported platform easy to work with. Thankfully the embedded Rust community has made this a lot easier with tools like [probe-rs](https://github.com/probe-rs/probe-rs) and [defmt](https://github.com/knurling-rs/defmt). K5 should also have best-in-class userspace libraries, to make it easy to develop new applications.
 
-The order is subject to change based on what I feel is the shiniest object, but that's the basic roadmap. If any of those things sound interesting to you and you want to help out, please reach out.
+#### Employ formal verification methods and other static analysis tools everywhere possible.
 
+Software engineering has long been the wild-west of the engineering world. There have been many attempts to improve this state-of-affairs, but they are often so cumbersome that they quickly become abandoned. Rust solves part of this problem through its approach to memory-safety, and there are other promising tools in the Rust eco-system that may allow us to verify large parts of the kernel. seL4 has led the way by formally verifying the entire kernel. In the short-term we plan to verify parts of K5's scheduler using [Kani](https://github.com/model-checking/kani).
 
-## Name
+#### Strong task isolation
+Much like seL4, K5 utilizies a capability based system for security. One of K5's goals is to provide strong isolation between tasks, and to ensure that communication only occurs through proper channels. This helps limit the blast-radius of security vulnerabilities.
 
-Ok, so to be honest the name was a happy-ish accident. I needed a random name, and I knew I was building an L4 kernel. So a number and letter sounded nice together. But I now have two nice stories to back up the name. The first is that much like k8s or i18n, the 5 is a stand-in for the rest of the word "kernel". Also, mountains in the Karakoram region of a few countries (I'm not here to create geopolitical conflict), are surveyed starting with K. K5 is Gasherbrum 1, which serves as the inspiration for the logo.
+#### Native enclave support
+In recent years enclave support has been addede to a whole variety of process. In particular TrustZone-M and PMP are becoming very common on microcontrollers. Current RTOSes leave it up to the user to figure out enclaves on their own, or they are told to use ARM TF-M (which is difficult to use and incomplete). K5 will provide enclave support for both RISC-V and ARMv8m, and make it a first class citizen on the OS. 
 
+## Non-Goals
 
-## Credits
-This project owes a lot to seL4 and Hubris OS, both fantastic kernels and resources. The context-switching, syscall code, and build system are heavily inspired by Hubris. The scheduler and IPC system are heavily based on seL4. The logging system is just straight-up defmt, but the RTT block is accessed through the kernel. Huge thanks to the Ferrous systems and the rest of the Rust embedded community, who have helped make embedded development far friendly to work with. 
+#### General purpose OS
+K5 is not going to be Linux, Darwin, or even Fuschia / Zychron. The goal is to make a kernel for high-security embedded applications, not your laptop. Thankfully, that means we don't have to worry about a whole-host of issues that most OSes worry about.
+
+#### Plug and play driver support
+
+Have you ever used Zephyr? Its kinda crazy how you can almost seemlessly port code from one board to another with little effort. But have you ever tried to use Zephyr in a non-standard way, yikes. That is NOT K5's goal. We want a healthy eco-system of drivers, hopefully with standard-ized interfaces for common operations, but code-compatibility between unrelated devices is not the end-goal.

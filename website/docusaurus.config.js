@@ -51,13 +51,14 @@ const config = {
       navbar: {
         title: "",
         logo: {
-          alt: 'My Site Logo',
+          alt: 'K5 Logo',
           src: 'img/logo.png',
         },
       },
       prism: {
         theme: lightCodeTheme,
         darkTheme: darkCodeTheme,
+        additionalLanguages: ['rust']
       },
     }),
 };
