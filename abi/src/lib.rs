@@ -16,11 +16,12 @@ mycelium_bitfield::bitfield! {
 #[derive(Debug)]
 #[repr(u8)]
 pub enum SyscallFn {
-    Send = 0b001,
-    Call = 0b010,
-    Recv = 0b011,
+    Send = 0b0001,
+    Call = 0b0010,
+    Recv = 0b0011,
     Log = 0b0101,
-    Caps = 0b111,
+    Caps = 0b0111,
+    Panik = 0b0110,
 }
 
 impl FromBits<u32> for SyscallFn {
@@ -34,6 +35,7 @@ impl FromBits<u32> for SyscallFn {
             bits if bits == Self::Recv as u8 => Ok(Self::Recv),
             bits if bits == Self::Log as u8 => Ok(Self::Log),
             bits if bits == Self::Caps as u8 => Ok(Self::Caps),
+            bits if bits == Self::Panik as u8 => Ok(Self::Panik),
             _ => Err("expected valid syscall fn identifier"),
         }
     }

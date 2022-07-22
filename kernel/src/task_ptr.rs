@@ -1,6 +1,7 @@
 use core::ptr::Pointee;
 
 #[derive(Copy, Clone)]
+#[repr(transparent)]
 pub struct TaskPtr<'a, T: ?Sized> {
     ptr: &'a T,
 }
@@ -15,9 +16,16 @@ impl<'a, T: Pointee + ?Sized> TaskPtr<'a, T> {
     pub(crate) unsafe fn ptr(&self) -> &'a T {
         self.ptr
     }
+
+    #[inline]
+    pub(crate) fn addr(&self) -> usize {
+        let (ptr, _) = (self.ptr as *const T).to_raw_parts();
+        ptr.addr()
+    }
 }
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct TaskPtrMut<'a, T: ?Sized> {
     ptr: &'a mut T,
 }
@@ -31,6 +39,12 @@ impl<'a, T: Pointee + ?Sized> TaskPtrMut<'a, T> {
 
     pub(crate) unsafe fn ptr(self) -> &'a mut T {
         self.ptr
+    }
+
+    #[inline]
+    pub(crate) fn addr(&self) -> usize {
+        let (ptr, _) = (self.ptr as *const T).to_raw_parts();
+        ptr.addr()
     }
 }
 

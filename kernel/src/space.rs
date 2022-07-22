@@ -59,6 +59,10 @@ impl<T, const N: usize> Space<T, N> {
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.items.iter_mut().filter_map(|i| i.as_mut())
     }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
 }
 
 #[cfg(test)]

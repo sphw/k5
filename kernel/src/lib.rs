@@ -37,14 +37,18 @@ use core::{
     pin::Pin,
     ptr::NonNull,
 };
+use defmt::error;
 use heapless::Vec;
 use regions::{Region, RegionAttr, RegionTable};
+use space::Space;
 use task_ptr::{TaskPtr, TaskPtrMut};
 
 const PRIORITY_COUNT: usize = 8;
+const TCB_CAPACITY: usize = 16;
 
 pub struct Kernel {
     pub(crate) scheduler: Scheduler,
+    epoch: usize,
     tasks: Vec<Task, 5>,
 }
 
@@ -56,7 +60,7 @@ impl Kernel {
                 Task::new(
                     desc.region_table(),
                     desc.init_stack_size,
-                    Vec::from_slice(&[desc.stack_space.clone()]).unwrap(),
+                    desc.stack_space.clone(),
                     // Safety: entrypoints are static in k5 currently, so this is safe
                     unsafe { TaskPtr::from_raw_parts(desc.entrypoint, ()) },
                     false,
@@ -72,7 +76,6 @@ impl Kernel {
             tcb_ref: ThreadRef(0),
             time: 20,
         };
-        let tcbs = Vec::default();
         const DOMAIN_ENTRY: MaybeUninit<List<DomainEntry>> = MaybeUninit::uninit();
         let mut domains: [MaybeUninit<List<DomainEntry>>; PRIORITY_COUNT] =
             [DOMAIN_ENTRY; PRIORITY_COUNT];
@@ -83,11 +86,12 @@ impl Kernel {
         let domains: [List<DomainEntry>; PRIORITY_COUNT] = unsafe { mem::transmute(domains) };
         Ok(Kernel {
             scheduler: Scheduler {
-                tcbs,
+                tcbs: Space::default(),
                 current_thread,
                 exhausted_threads: List::new(),
                 domains,
             },
+            epoch: 0,
             tasks,
         })
     }
@@ -100,6 +104,7 @@ impl Kernel {
         cooldown: usize,
         entrypoint: TaskPtr<'static, fn() -> !>,
     ) -> Result<ThreadRef, KernelError> {
+        let epoch = self.epoch;
         let task = self.task_mut(task_ref)?;
         let entrypoint = task
             .validate_ptr(entrypoint)
@@ -109,7 +114,15 @@ impl Kernel {
             arch::clear_mem(&task);
         }
         let stack = task.alloc_stack().ok_or(KernelError::StackExhausted)?;
-        let mut tcb = TCB::new(task_ref, stack, priority, budget, cooldown, entrypoint_addr);
+        let mut tcb = TCB::new(
+            task_ref,
+            stack,
+            priority,
+            budget,
+            cooldown,
+            entrypoint_addr,
+            epoch,
+        );
         arch::init_tcb_stack(task, &mut tcb);
         self.scheduler.spawn(tcb)
     }
@@ -224,7 +237,7 @@ impl Kernel {
         &mut self,
         index: abi::SyscallIndex,
         args: &SyscallArgs,
-    ) -> Result<(Option<ThreadRef>, SyscallReturn), KernelError> {
+    ) -> Result<(Option<ThreadRef>, Option<SyscallReturn>), KernelError> {
         match index.get(abi::SyscallIndex::SYSCALL_FN) {
             abi::SyscallFn::Send => {
                 if index.get(SyscallIndex::SYSCALL_ARG_TYPE) == SyscallDataType::Page {
@@ -234,7 +247,7 @@ impl Kernel {
                 let slice = match self.get_syscall_buf::<1024>(tcb, args) {
                     Ok(s) => s,
                     Err(KernelError::ABI(e)) => {
-                        return Ok((None, e.into()));
+                        return Ok((None, Some(e.into())));
                     }
                     Err(e) => return Err(e),
                 };
@@ -245,14 +258,18 @@ impl Kernel {
                 if let Some(thread) = self.scheduler.next_thread(priority) {
                     Ok((
                         self.scheduler.switch_thread(thread).map(Some)?,
-                        SyscallReturn::new()
-                            .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+                        Some(
+                            SyscallReturn::new()
+                                .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+                        ),
                     ))
                 } else {
                     Ok((
                         None,
-                        SyscallReturn::new()
-                            .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+                        Some(
+                            SyscallReturn::new()
+                                .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+                        ),
                     ))
                 }
             }
@@ -264,7 +281,7 @@ impl Kernel {
                 let slice = match self.get_syscall_buf::<1024>(tcb, args) {
                     Ok(s) => s,
                     Err(KernelError::ABI(e)) => {
-                        return Ok((None, e.into()));
+                        return Ok((None, Some(e.into())));
                     }
                     Err(e) => return Err(e),
                 };
@@ -283,7 +300,7 @@ impl Kernel {
                 let thread = self.call(cap, msg, out_buf, recv_resp)?;
                 Ok((
                     self.scheduler.switch_thread(thread).map(Some)?,
-                    SyscallReturn::new(),
+                    Some(SyscallReturn::new()),
                 ))
             }
             abi::SyscallFn::Recv => {
@@ -322,10 +339,10 @@ impl Kernel {
 
                     Ok((
                         Some(self.wait(mask as usize, out_buf, recv_resp)?),
-                        SyscallReturn::new(),
+                        Some(SyscallReturn::new()),
                     ))
                 } else {
-                    Ok((None, SyscallReturn::new()))
+                    Ok((None, Some(SyscallReturn::new())))
                 }
             }
             abi::SyscallFn::Log => {
@@ -333,12 +350,12 @@ impl Kernel {
                 let log_buf = match self.get_syscall_buf::<255>(tcb, args) {
                     Ok(s) => s,
                     Err(KernelError::ABI(e)) => {
-                        return Ok((None, e.into()));
+                        return Ok((None, Some(e.into())));
                     }
                     Err(e) => return Err(e),
                 };
                 crate::defmt_log::log(tcb.task.0 as u8 + 1, log_buf);
-                Ok((None, SyscallReturn::new()))
+                Ok((None, Some(SyscallReturn::new())))
             }
             abi::SyscallFn::Caps => {
                 let tcb = self.scheduler.current_thread()?;
@@ -361,7 +378,62 @@ impl Kernel {
                 let ret = SyscallReturn::new()
                     .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy)
                     .with(SyscallReturn::SYSCALL_LEN, len as u64);
-                Ok((None, ret))
+                Ok((None, Some(ret)))
+            }
+            abi::SyscallFn::Panik => {
+                let tcb = self.scheduler.current_thread()?;
+                let task_ref = tcb.task;
+                error!("task {:?} paniked", task_ref.0);
+                for domain in &mut self.scheduler.domains {
+                    let mut cursor = domain.cursor_front_mut();
+                    cursor.move_prev();
+                    while let Some(entry) = { cursor.next() } {
+                        if entry
+                            .tcb_ref
+                            .and_then(|t| self.scheduler.tcbs.get(*t))
+                            .is_some()
+                        {
+                            cursor.remove_current();
+                        }
+                    }
+                }
+                let mut priority = None;
+                let mut budget = None;
+                let mut cooldown = None;
+                let task = self
+                    .tasks
+                    .get_mut(task_ref.0)
+                    .ok_or(KernelError::InvalidTaskRef)?;
+                task.reset_stack_ptr();
+                let task = self
+                    .tasks
+                    .get(task_ref.0)
+                    .ok_or(KernelError::InvalidTaskRef)?;
+                for i in 0..16 {
+                    if let Some(tcb) = self.scheduler.tcbs.get(i) {
+                        if tcb.task == task_ref {
+                            if tcb.entrypoint == task.entrypoint.addr() {
+                                priority = Some(tcb.priority);
+                                budget = Some(tcb.budget);
+                                cooldown = Some(tcb.cooldown);
+                            }
+                            self.scheduler.tcbs.remove(i);
+                        }
+                    }
+                }
+                let (priority, budget, cooldown) = if let Some(priority) = priority && let Some(budget) = budget && let Some(cooldown) = cooldown {
+                    (priority, budget, cooldown)
+                }else {
+                    return Err(KernelError:: InitTCBNotFound);
+                };
+                arch::clear_mem(&task);
+                self.spawn_thread(task_ref, priority, budget, cooldown, task.entrypoint);
+                let next_thread = self
+                    .scheduler
+                    .next_thread(0)
+                    .unwrap_or_else(ThreadRef::idle);
+                let next_thread = self.scheduler.switch_thread(next_thread)?;
+                Ok((Some(next_thread), None))
             }
         }
     }
@@ -392,7 +464,7 @@ impl Kernel {
 }
 
 pub(crate) struct Scheduler {
-    tcbs: Vec<TCB, 15>,
+    tcbs: Space<TCB, TCB_CAPACITY>,
     domains: [List<DomainEntry>; PRIORITY_COUNT],
     exhausted_threads: List<ExhaustedThread>,
     current_thread: ThreadTime,
@@ -404,10 +476,11 @@ impl Scheduler {
             .domains
             .get_mut(tcb.priority)
             .ok_or(KernelError::InvalidPriority)?;
-        let tcb_ref = ThreadRef(self.tcbs.len());
-        self.tcbs
-            .push(tcb)
-            .map_err(|_| KernelError::TooManyThreads)?;
+        let tcb_ref = ThreadRef(
+            self.tcbs
+                .push(tcb)
+                .ok_or_else(|| KernelError::TooManyThreads)?,
+        );
         d.push_back(Box::pin(DomainEntry {
             tcb_ref: Some(tcb_ref),
             ..Default::default()
@@ -566,10 +639,11 @@ pub enum KernelError {
     WrongCapabilityType,
     StackExhausted,
     InvalidTaskPtr,
+    InitTCBNotFound,
     ABI(abi::Error),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct TaskRef(pub usize);
 
 #[repr(C)]
@@ -584,6 +658,7 @@ pub(crate) struct TCB {
     capabilities: List<CapEntry>,
     stack_pointer: usize,
     entrypoint: usize,
+    epoch: usize,
 }
 
 impl TCB {
@@ -594,6 +669,7 @@ impl TCB {
         budget: usize,
         cooldown: usize,
         entrypoint: usize,
+        epoch: usize,
     ) -> Self {
         Self {
             task,
@@ -608,6 +684,7 @@ impl TCB {
             stack_pointer,
             entrypoint,
             saved_state: Default::default(),
+            epoch,
         }
     }
 
@@ -735,6 +812,7 @@ enum ThreadState {
 pub(crate) struct Task {
     region_table: RegionTable,
     stack_size: usize,
+    initial_stack_ptr: Range<usize>,
     available_stack_ptr: Vec<Range<usize>, 8>,
     pub entrypoint: TaskPtr<'static, fn() -> !>,
     secure: bool,
@@ -753,18 +831,23 @@ impl Task {
     pub fn new(
         region_table: RegionTable,
         stack_size: usize,
-        available_stack_ptr: Vec<Range<usize>, 8>,
+        initial_stack_ptr: Range<usize>,
         entrypoint: TaskPtr<'static, fn() -> !>,
         secure: bool,
     ) -> Self {
         Self {
             region_table,
             stack_size,
-            available_stack_ptr,
+            available_stack_ptr: Vec::from_slice(&[initial_stack_ptr.clone()]).unwrap(),
+            initial_stack_ptr,
             secure,
             entrypoint,
             state: TaskState::Pending,
         }
+    }
+
+    fn reset_stack_ptr(&mut self) {
+        self.available_stack_ptr = Vec::from_slice(&[self.initial_stack_ptr.clone()]).unwrap()
     }
 
     fn validate_ptr<'a, T: core::ptr::Pointee + ?Sized>(

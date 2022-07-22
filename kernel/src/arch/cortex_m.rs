@@ -308,7 +308,7 @@ fn systick_inner() {
     }
 }
 
-fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
+fn syscall_inner(index: SyscallIndex) {
     // Safety: We are safe to access global state due to our interrupt model
     let args = unsafe {
         let tcb = &*CURRENT_TCB.load(Ordering::SeqCst);
@@ -318,10 +318,12 @@ fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
     let kernel = unsafe { &mut *kernel() };
     let (next_tcb, ret) = kernel.syscall(index, args).unwrap();
 
-    // Safety: We are safe to access global state due to our interrupt model,
-    // plus we have thrown away the immutable reference to CURRENT_TCB above
-    let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
-    tcb.saved_state.set_syscall_return(ret);
+    if let Some(ret) = ret {
+        // Safety: We are safe to access global state due to our interrupt model,
+        // plus we have thrown away the immutable reference to CURRENT_TCB above
+        let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
+        tcb.saved_state.set_syscall_return(ret);
+    }
 
     if let Some(tcb_ref) = next_tcb {
         let tcb = kernel.scheduler.get_tcb(tcb_ref).unwrap();
@@ -330,7 +332,6 @@ fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
         // Safety: The TCB comes from the kernel which is stored statically so this is safe
         unsafe { set_current_tcb(tcb) }
     }
-    ret
 }
 
 pub(crate) fn translate_task_ptr<'a, T: ptr::Pointee + ?Sized>(
