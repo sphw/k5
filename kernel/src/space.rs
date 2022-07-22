@@ -13,6 +13,7 @@ impl<T, const N: usize> Default for Space<T, N> {
         for item in &mut items {
             item.write(None);
         }
+        // Safety: we just inited all of the above items, so this is safe
         let items = unsafe { MaybeUninit::array_assume_init(items) };
         let mut free_list = [0; N];
         for (i, x) in free_list.iter_mut().enumerate() {
@@ -52,14 +53,17 @@ impl<T, const N: usize> Space<T, N> {
         Some(item)
     }
 
+    #[allow(dead_code)]
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.items.iter().filter_map(|i| i.as_ref())
     }
 
+    #[allow(dead_code)]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.items.iter_mut().filter_map(|i| i.as_mut())
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.len
     }

@@ -111,10 +111,10 @@ impl Kernel {
             .ok_or(KernelError::InvalidEntrypoint)?;
         let entrypoint_addr = (entrypoint as *const fn() -> !).addr();
         if task.state != TaskState::Started {
-            arch::clear_mem(&task);
+            arch::clear_mem(task);
         }
         let stack = task.alloc_stack().ok_or(KernelError::StackExhausted)?;
-        let mut tcb = TCB::new(
+        let mut tcb = Tcb::new(
             task_ref,
             stack,
             priority,
@@ -404,6 +404,7 @@ impl Kernel {
                     .tasks
                     .get_mut(task_ref.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
+                task.state = TaskState::Pending;
                 task.reset_stack_ptr();
                 let task = self
                     .tasks
@@ -426,8 +427,7 @@ impl Kernel {
                 }else {
                     return Err(KernelError:: InitTCBNotFound);
                 };
-                arch::clear_mem(&task);
-                self.spawn_thread(task_ref, priority, budget, cooldown, task.entrypoint);
+                self.spawn_thread(task_ref, priority, budget, cooldown, task.entrypoint)?;
                 let next_thread = self
                     .scheduler
                     .next_thread(0)
@@ -441,7 +441,7 @@ impl Kernel {
     #[inline(always)]
     fn get_syscall_buf<const N: usize>(
         &self,
-        tcb: &TCB,
+        tcb: &Tcb,
         args: &SyscallArgs,
     ) -> Result<&[u8], KernelError> {
         let task = self
@@ -464,23 +464,19 @@ impl Kernel {
 }
 
 pub(crate) struct Scheduler {
-    tcbs: Space<TCB, TCB_CAPACITY>,
+    tcbs: Space<Tcb, TCB_CAPACITY>,
     domains: [List<DomainEntry>; PRIORITY_COUNT],
     exhausted_threads: List<ExhaustedThread>,
     current_thread: ThreadTime,
 }
 
 impl Scheduler {
-    pub fn spawn(&mut self, tcb: TCB) -> Result<ThreadRef, KernelError> {
+    pub fn spawn(&mut self, tcb: Tcb) -> Result<ThreadRef, KernelError> {
         let d = self
             .domains
             .get_mut(tcb.priority)
             .ok_or(KernelError::InvalidPriority)?;
-        let tcb_ref = ThreadRef(
-            self.tcbs
-                .push(tcb)
-                .ok_or_else(|| KernelError::TooManyThreads)?,
-        );
+        let tcb_ref = ThreadRef(self.tcbs.push(tcb).ok_or(KernelError::TooManyThreads)?);
         d.push_back(Box::pin(DomainEntry {
             tcb_ref: Some(tcb_ref),
             ..Default::default()
@@ -582,22 +578,22 @@ impl Scheduler {
     }
 
     #[inline]
-    pub fn current_thread(&self) -> Result<&TCB, KernelError> {
+    pub fn current_thread(&self) -> Result<&Tcb, KernelError> {
         self.get_tcb(self.current_thread.tcb_ref)
     }
 
     #[inline]
-    pub fn current_thread_mut(&mut self) -> Result<&mut TCB, KernelError> {
+    pub fn current_thread_mut(&mut self) -> Result<&mut Tcb, KernelError> {
         self.get_tcb_mut(self.current_thread.tcb_ref)
     }
 
     #[inline]
-    pub fn get_tcb(&self, tcb_ref: ThreadRef) -> Result<&TCB, KernelError> {
+    pub fn get_tcb(&self, tcb_ref: ThreadRef) -> Result<&Tcb, KernelError> {
         self.tcbs.get(*tcb_ref).ok_or(KernelError::InvalidThreadRef)
     }
 
     #[inline]
-    pub fn get_tcb_mut(&mut self, tcb_ref: ThreadRef) -> Result<&mut TCB, KernelError> {
+    pub fn get_tcb_mut(&mut self, tcb_ref: ThreadRef) -> Result<&mut Tcb, KernelError> {
         self.tcbs
             .get_mut(*tcb_ref)
             .ok_or(KernelError::InvalidThreadRef)
@@ -643,11 +639,11 @@ pub enum KernelError {
     ABI(abi::Error),
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TaskRef(pub usize);
 
 #[repr(C)]
-pub(crate) struct TCB {
+pub(crate) struct Tcb {
     saved_state: arch::SavedThreadState,
     task: TaskRef, // Maybe use RC for this
     req_queue: List<IPCMsg>,
@@ -661,7 +657,7 @@ pub(crate) struct TCB {
     epoch: usize,
 }
 
-impl TCB {
+impl Tcb {
     pub fn new(
         task: TaskRef,
         stack_pointer: usize,
@@ -693,7 +689,7 @@ impl TCB {
         for c in self.capabilities.iter() {
             let c_addr = (c as *const CapEntry).addr();
             if c_addr == *cap_ref {
-                return Ok(&c);
+                return Ok(c);
             }
         }
         Err(KernelError::InvalidCapRef)
@@ -712,6 +708,8 @@ impl TCB {
             return Err(KernelError::WrongCapabilityType);
         };
         if endpoint.disposable {
+            // Safety: this function is marked as unsafe, because the user must guarentee that
+            // the item is in the list. dest_cap comes from self.capabilities, so this is safe
             unsafe {
                 self.capabilities.remove(dest_cap.into());
             }
@@ -824,7 +822,6 @@ pub(crate) struct Task {
 enum TaskState {
     Pending,
     Started,
-    Crashed,
 }
 
 impl Task {
@@ -951,7 +948,7 @@ pub struct TaskDesc {
 
 impl TaskDesc {
     fn region_table(&self) -> RegionTable {
-        let table = RegionTable {
+        RegionTable {
             regions: Vec::from_slice(&[
                 Region {
                     range: self.flash_region.clone(),
@@ -963,7 +960,6 @@ impl TaskDesc {
                 },
             ])
             .unwrap(),
-        };
-        table
+        }
     }
 }

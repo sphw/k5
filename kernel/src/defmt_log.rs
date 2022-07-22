@@ -7,12 +7,19 @@ static mut ENCODER: defmt::Encoder = ::defmt::Encoder::new();
 
 ::defmt::timestamp!("{=u32:us}", 0);
 
+// Safety: defmt::Logger requires that only one thread access, Logger at once
+// Since the Kernel is single threaded we do not need to guard this
 unsafe impl defmt::Logger for KernelLogger {
-    fn acquire() {}
+    fn acquire() {
+        // Safety: Kernel is single threaded to static mut is safe
+        unsafe { ENCODER.start_frame(|b| log(0, b)) };
+    }
 
     unsafe fn flush() {}
 
-    unsafe fn release() {}
+    unsafe fn release() {
+        ENCODER.end_frame(|b| log(0, b));
+    }
 
     unsafe fn write(bytes: &[u8]) {
         ENCODER.write(bytes, |b| log(0, b));
