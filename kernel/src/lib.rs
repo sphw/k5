@@ -102,6 +102,9 @@ impl Kernel {
             .validate_ptr(entrypoint)
             .ok_or(KernelError::InvalidEntrypoint)?;
         let entrypoint_addr = (entrypoint as *const fn() -> !).addr();
+        if task.state != TaskState::Started {
+            arch::clear_mem(&task);
+        }
         let stack = task.alloc_stack().ok_or(KernelError::StackExhausted)?;
         let mut tcb = TCB::new(task_ref, stack, priority, budget, cooldown, entrypoint_addr);
         arch::init_tcb_stack(task, &mut tcb);
@@ -719,6 +722,15 @@ pub(crate) struct Task {
     available_stack_ptr: Vec<Range<usize>, 8>,
     pub entrypoint: TaskPtr<'static, fn() -> !>,
     secure: bool,
+    state: TaskState,
+}
+
+#[repr(u8)]
+#[derive(Clone, PartialEq)]
+enum TaskState {
+    Pending,
+    Started,
+    Crashed,
 }
 
 impl Task {
@@ -735,6 +747,7 @@ impl Task {
             available_stack_ptr,
             secure,
             entrypoint,
+            state: TaskState::Pending,
         }
     }
 

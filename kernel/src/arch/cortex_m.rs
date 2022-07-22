@@ -139,6 +139,24 @@ pub(crate) fn init_tcb_stack(task: &Task, tcb: &mut TCB) {
     tcb.saved_state.exc_return = EXC_RETURN;
 }
 
+pub(crate) fn clear_mem(task: &Task) {
+    let stack = &task.available_stack_ptr[0].start;
+    for region in &task.region_table.regions {
+        if !region.range.contains(stack) {
+            continue;
+        }
+        let ptr = unsafe {
+            TaskPtrMut::<'_, [u32]>::from_raw_parts(region.range.start, region.range.len() / 32)
+        };
+        let mem = task
+            .validate_mut_ptr(ptr)
+            .expect("pointer not in task memory");
+        for word in mem {
+            *word = 0xdeadf00d;
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Default)]
 pub struct SavedThreadState {
