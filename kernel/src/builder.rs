@@ -84,6 +84,7 @@ impl KernelBuilder<'_> {
         task.add_cap(Cap::Endpoint(Endpoint {
             tcb_ref: dest,
             addr,
+            disposable: false,
         }));
         self
     }

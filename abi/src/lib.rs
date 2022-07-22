@@ -192,6 +192,7 @@ pub enum Cap {
 pub struct Endpoint {
     pub tcb_ref: ThreadRef,
     pub addr: usize,
+    pub disposable: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, defmt::Format)]

@@ -126,7 +126,7 @@ impl Kernel {
     /// Sends a message from the current thread to the specified endpoint
     /// This function takes a [`CapRef`] and expects it to be an [`Endpoint`]
     pub(crate) fn send(&mut self, dest: CapRef, msg: Box<[u8]>) -> Result<(), KernelError> {
-        let endpoint = self.scheduler.current_thread()?.endpoint(dest)?;
+        let endpoint = self.scheduler.current_thread_mut()?.endpoint(dest)?;
         self.send_inner(endpoint, msg, None)
     }
 
@@ -180,10 +180,11 @@ impl Kernel {
         recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
     ) -> Result<ThreadRef, KernelError> {
         let src_ref = self.scheduler.current_thread.tcb_ref;
-        let endpoint = self.scheduler.current_thread()?.endpoint(dest)?;
+        let endpoint = self.scheduler.current_thread_mut()?.endpoint(dest)?;
         let reply_endpoint = Endpoint {
             tcb_ref: src_ref,
             addr: endpoint.addr | 0x80000000,
+            disposable: true,
         };
         self.send_inner(endpoint, msg, Some(reply_endpoint))?;
         self.wait(endpoint.addr | 0x80000000, out_buf, recv_resp) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
@@ -607,24 +608,35 @@ impl TCB {
         }
     }
 
-    fn capability(&self, cap_ref: CapRef) -> Result<&Cap, KernelError> {
+    #[inline]
+    fn cap_entry(&self, cap_ref: CapRef) -> Result<&CapEntry, KernelError> {
         for c in self.capabilities.iter() {
             let c_addr = (c as *const CapEntry).addr();
             if c_addr == *cap_ref {
-                return Ok(&c.cap);
+                return Ok(&c);
             }
         }
         Err(KernelError::InvalidCapRef)
     }
 
-    fn endpoint(&self, cap_ref: CapRef) -> Result<Endpoint, KernelError> {
-        let dest_cap = self.capability(cap_ref)?;
-        let endpoint = if let Cap::Endpoint(endpoint) = dest_cap {
+    #[allow(dead_code)]
+    fn capability(&self, cap_ref: CapRef) -> Result<&Cap, KernelError> {
+        self.cap_entry(cap_ref).map(|e| &e.cap)
+    }
+
+    fn endpoint(&mut self, cap_ref: CapRef) -> Result<Endpoint, KernelError> {
+        let dest_cap = self.cap_entry(cap_ref)?;
+        let endpoint = if let Cap::Endpoint(endpoint) = dest_cap.cap {
             endpoint
         } else {
             return Err(KernelError::WrongCapabilityType);
         };
-        Ok(*endpoint)
+        if endpoint.disposable {
+            unsafe {
+                self.capabilities.remove(dest_cap.into());
+            }
+        }
+        Ok(endpoint)
     }
 
     pub fn add_cap(&mut self, cap: Cap) {
@@ -682,6 +694,7 @@ impl TCB {
             let cap_ptr = &*self.capabilities.back().unwrap() as *const CapEntry;
             recv_resp.cap = Some(CapRef(cap_ptr.addr()));
         }
+        drop(msg);
         Ok(true)
     }
 }
