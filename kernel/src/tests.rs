@@ -86,6 +86,7 @@ fn test_send_schedule() {
     b.add_cap(Cap::Endpoint(Endpoint {
         tcb_ref: ThreadRef(1),
         addr: 1,
+        disposable: false,
     }));
     let cap_ptr = &*b.capabilities.back().unwrap() as *const CapEntry;
     let cap_ref = CapRef(cap_ptr.addr());
@@ -125,6 +126,7 @@ fn test_call_schedule() {
     b.add_cap(Cap::Endpoint(Endpoint {
         tcb_ref: ThreadRef(1),
         addr: 1,
+        disposable: false,
     }));
 
     let cap_ref = unsafe {

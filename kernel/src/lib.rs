@@ -6,6 +6,8 @@
 #![feature(ptr_metadata)]
 #![feature(strict_provenance)]
 #![feature(naked_functions)]
+#![feature(maybe_uninit_uninit_array)]
+#![feature(maybe_uninit_array_assume_init)]
 
 extern crate alloc;
 
@@ -13,6 +15,7 @@ mod arch;
 mod builder;
 mod defmt_log;
 mod regions;
+mod space;
 mod task_ptr;
 
 pub use builder::*;
