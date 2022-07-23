@@ -6,14 +6,18 @@
 #![feature(ptr_metadata)]
 #![feature(strict_provenance)]
 #![feature(naked_functions)]
+#![feature(maybe_uninit_uninit_array)]
+#![feature(maybe_uninit_array_assume_init)]
 
 extern crate alloc;
 
 mod arch;
+mod builder;
+mod defmt_log;
+mod regions;
+mod space;
 mod task_ptr;
 
-mod builder;
-mod regions;
 pub use builder::*;
 #[cfg(test)]
 mod tests;
@@ -33,14 +37,18 @@ use core::{
     pin::Pin,
     ptr::NonNull,
 };
+use defmt::error;
 use heapless::Vec;
 use regions::{Region, RegionAttr, RegionTable};
+use space::Space;
 use task_ptr::{TaskPtr, TaskPtrMut};
 
 const PRIORITY_COUNT: usize = 8;
+const TCB_CAPACITY: usize = 16;
 
 pub struct Kernel {
     pub(crate) scheduler: Scheduler,
+    epoch: usize,
     tasks: Vec<Task, 5>,
 }
 
@@ -52,7 +60,7 @@ impl Kernel {
                 Task::new(
                     desc.region_table(),
                     desc.init_stack_size,
-                    Vec::from_slice(&[desc.stack_space.clone()]).unwrap(),
+                    desc.stack_space.clone(),
                     // Safety: entrypoints are static in k5 currently, so this is safe
                     unsafe { TaskPtr::from_raw_parts(desc.entrypoint, ()) },
                     false,
@@ -68,7 +76,6 @@ impl Kernel {
             tcb_ref: ThreadRef(0),
             time: 20,
         };
-        let tcbs = Vec::default();
         const DOMAIN_ENTRY: MaybeUninit<List<DomainEntry>> = MaybeUninit::uninit();
         let mut domains: [MaybeUninit<List<DomainEntry>>; PRIORITY_COUNT] =
             [DOMAIN_ENTRY; PRIORITY_COUNT];
@@ -79,11 +86,12 @@ impl Kernel {
         let domains: [List<DomainEntry>; PRIORITY_COUNT] = unsafe { mem::transmute(domains) };
         Ok(Kernel {
             scheduler: Scheduler {
-                tcbs,
+                tcbs: Space::default(),
                 current_thread,
                 exhausted_threads: List::new(),
                 domains,
             },
+            epoch: 0,
             tasks,
         })
     }
@@ -96,13 +104,25 @@ impl Kernel {
         cooldown: usize,
         entrypoint: TaskPtr<'static, fn() -> !>,
     ) -> Result<ThreadRef, KernelError> {
+        let epoch = self.epoch;
         let task = self.task_mut(task_ref)?;
         let entrypoint = task
             .validate_ptr(entrypoint)
             .ok_or(KernelError::InvalidEntrypoint)?;
         let entrypoint_addr = (entrypoint as *const fn() -> !).addr();
+        if task.state != TaskState::Started {
+            arch::clear_mem(task);
+        }
         let stack = task.alloc_stack().ok_or(KernelError::StackExhausted)?;
-        let mut tcb = TCB::new(task_ref, stack, priority, budget, cooldown, entrypoint_addr);
+        let mut tcb = Tcb::new(
+            task_ref,
+            stack,
+            priority,
+            budget,
+            cooldown,
+            entrypoint_addr,
+            epoch,
+        );
         arch::init_tcb_stack(task, &mut tcb);
         self.scheduler.spawn(tcb)
     }
@@ -122,7 +142,7 @@ impl Kernel {
     /// Sends a message from the current thread to the specified endpoint
     /// This function takes a [`CapRef`] and expects it to be an [`Endpoint`]
     pub(crate) fn send(&mut self, dest: CapRef, msg: Box<[u8]>) -> Result<(), KernelError> {
-        let endpoint = self.scheduler.current_thread()?.endpoint(dest)?;
+        let endpoint = self.scheduler.current_thread_mut()?.endpoint(dest)?;
         self.send_inner(endpoint, msg, None)
     }
 
@@ -176,10 +196,11 @@ impl Kernel {
         recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
     ) -> Result<ThreadRef, KernelError> {
         let src_ref = self.scheduler.current_thread.tcb_ref;
-        let endpoint = self.scheduler.current_thread()?.endpoint(dest)?;
+        let endpoint = self.scheduler.current_thread_mut()?.endpoint(dest)?;
         let reply_endpoint = Endpoint {
             tcb_ref: src_ref,
             addr: endpoint.addr | 0x80000000,
+            disposable: true,
         };
         self.send_inner(endpoint, msg, Some(reply_endpoint))?;
         self.wait(endpoint.addr | 0x80000000, out_buf, recv_resp) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
@@ -216,7 +237,7 @@ impl Kernel {
         &mut self,
         index: abi::SyscallIndex,
         args: &SyscallArgs,
-    ) -> Result<(Option<ThreadRef>, SyscallReturn), KernelError> {
+    ) -> Result<(Option<ThreadRef>, Option<SyscallReturn>), KernelError> {
         match index.get(abi::SyscallIndex::SYSCALL_FN) {
             abi::SyscallFn::Send => {
                 if index.get(SyscallIndex::SYSCALL_ARG_TYPE) == SyscallDataType::Page {
@@ -226,7 +247,7 @@ impl Kernel {
                 let slice = match self.get_syscall_buf::<1024>(tcb, args) {
                     Ok(s) => s,
                     Err(KernelError::ABI(e)) => {
-                        return Ok((None, e.into()));
+                        return Ok((None, Some(e.into())));
                     }
                     Err(e) => return Err(e),
                 };
@@ -237,14 +258,18 @@ impl Kernel {
                 if let Some(thread) = self.scheduler.next_thread(priority) {
                     Ok((
                         self.scheduler.switch_thread(thread).map(Some)?,
-                        SyscallReturn::new()
-                            .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+                        Some(
+                            SyscallReturn::new()
+                                .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+                        ),
                     ))
                 } else {
                     Ok((
                         None,
-                        SyscallReturn::new()
-                            .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+                        Some(
+                            SyscallReturn::new()
+                                .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+                        ),
                     ))
                 }
             }
@@ -256,7 +281,7 @@ impl Kernel {
                 let slice = match self.get_syscall_buf::<1024>(tcb, args) {
                     Ok(s) => s,
                     Err(KernelError::ABI(e)) => {
-                        return Ok((None, e.into()));
+                        return Ok((None, Some(e.into())));
                     }
                     Err(e) => return Err(e),
                 };
@@ -275,7 +300,7 @@ impl Kernel {
                 let thread = self.call(cap, msg, out_buf, recv_resp)?;
                 Ok((
                     self.scheduler.switch_thread(thread).map(Some)?,
-                    SyscallReturn::new(),
+                    Some(SyscallReturn::new()),
                 ))
             }
             abi::SyscallFn::Recv => {
@@ -314,10 +339,10 @@ impl Kernel {
 
                     Ok((
                         Some(self.wait(mask as usize, out_buf, recv_resp)?),
-                        SyscallReturn::new(),
+                        Some(SyscallReturn::new()),
                     ))
                 } else {
-                    Ok((None, SyscallReturn::new()))
+                    Ok((None, Some(SyscallReturn::new())))
                 }
             }
             abi::SyscallFn::Log => {
@@ -325,18 +350,12 @@ impl Kernel {
                 let log_buf = match self.get_syscall_buf::<255>(tcb, args) {
                     Ok(s) => s,
                     Err(KernelError::ABI(e)) => {
-                        return Ok((None, e.into()));
+                        return Ok((None, Some(e.into())));
                     }
                     Err(e) => return Err(e),
                 };
-                let mut buf = [0u8; 257];
-                buf[0] = tcb.task.0 as u8;
-                buf[1] = log_buf.len() as u8;
-                // NOTE: this assumes that the internal task index is the same as codegen task index, which is true for embedded,
-                // but for systems with dynamic tasks is not true.
-                buf[2..log_buf.len() + 2].clone_from_slice(log_buf);
-                arch::log(&buf[..log_buf.len() + 2]);
-                Ok((None, SyscallReturn::new()))
+                crate::defmt_log::log(tcb.task.0 as u8 + 1, log_buf);
+                Ok((None, Some(SyscallReturn::new())))
             }
             abi::SyscallFn::Caps => {
                 let tcb = self.scheduler.current_thread()?;
@@ -359,7 +378,62 @@ impl Kernel {
                 let ret = SyscallReturn::new()
                     .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy)
                     .with(SyscallReturn::SYSCALL_LEN, len as u64);
-                Ok((None, ret))
+                Ok((None, Some(ret)))
+            }
+            abi::SyscallFn::Panik => {
+                let tcb = self.scheduler.current_thread()?;
+                let task_ref = tcb.task;
+                error!("task {:?} paniked", task_ref.0);
+                for domain in &mut self.scheduler.domains {
+                    let mut cursor = domain.cursor_front_mut();
+                    cursor.move_prev();
+                    while let Some(entry) = { cursor.next() } {
+                        if entry
+                            .tcb_ref
+                            .and_then(|t| self.scheduler.tcbs.get(*t))
+                            .is_some()
+                        {
+                            cursor.remove_current();
+                        }
+                    }
+                }
+                let mut priority = None;
+                let mut budget = None;
+                let mut cooldown = None;
+                let task = self
+                    .tasks
+                    .get_mut(task_ref.0)
+                    .ok_or(KernelError::InvalidTaskRef)?;
+                task.state = TaskState::Pending;
+                task.reset_stack_ptr();
+                let task = self
+                    .tasks
+                    .get(task_ref.0)
+                    .ok_or(KernelError::InvalidTaskRef)?;
+                for i in 0..16 {
+                    if let Some(tcb) = self.scheduler.tcbs.get(i) {
+                        if tcb.task == task_ref {
+                            if tcb.entrypoint == task.entrypoint.addr() {
+                                priority = Some(tcb.priority);
+                                budget = Some(tcb.budget);
+                                cooldown = Some(tcb.cooldown);
+                            }
+                            self.scheduler.tcbs.remove(i);
+                        }
+                    }
+                }
+                let (priority, budget, cooldown) = if let Some(priority) = priority && let Some(budget) = budget && let Some(cooldown) = cooldown {
+                    (priority, budget, cooldown)
+                }else {
+                    return Err(KernelError:: InitTCBNotFound);
+                };
+                self.spawn_thread(task_ref, priority, budget, cooldown, task.entrypoint)?;
+                let next_thread = self
+                    .scheduler
+                    .next_thread(0)
+                    .unwrap_or_else(ThreadRef::idle);
+                let next_thread = self.scheduler.switch_thread(next_thread)?;
+                Ok((Some(next_thread), None))
             }
         }
     }
@@ -367,7 +441,7 @@ impl Kernel {
     #[inline(always)]
     fn get_syscall_buf<const N: usize>(
         &self,
-        tcb: &TCB,
+        tcb: &Tcb,
         args: &SyscallArgs,
     ) -> Result<&[u8], KernelError> {
         let task = self
@@ -390,22 +464,19 @@ impl Kernel {
 }
 
 pub(crate) struct Scheduler {
-    tcbs: Vec<TCB, 15>,
+    tcbs: Space<Tcb, TCB_CAPACITY>,
     domains: [List<DomainEntry>; PRIORITY_COUNT],
     exhausted_threads: List<ExhaustedThread>,
     current_thread: ThreadTime,
 }
 
 impl Scheduler {
-    pub fn spawn(&mut self, tcb: TCB) -> Result<ThreadRef, KernelError> {
+    pub fn spawn(&mut self, tcb: Tcb) -> Result<ThreadRef, KernelError> {
         let d = self
             .domains
             .get_mut(tcb.priority)
             .ok_or(KernelError::InvalidPriority)?;
-        let tcb_ref = ThreadRef(self.tcbs.len());
-        self.tcbs
-            .push(tcb)
-            .map_err(|_| KernelError::TooManyThreads)?;
+        let tcb_ref = ThreadRef(self.tcbs.push(tcb).ok_or(KernelError::TooManyThreads)?);
         d.push_back(Box::pin(DomainEntry {
             tcb_ref: Some(tcb_ref),
             ..Default::default()
@@ -507,22 +578,22 @@ impl Scheduler {
     }
 
     #[inline]
-    pub fn current_thread(&self) -> Result<&TCB, KernelError> {
+    pub fn current_thread(&self) -> Result<&Tcb, KernelError> {
         self.get_tcb(self.current_thread.tcb_ref)
     }
 
     #[inline]
-    pub fn current_thread_mut(&mut self) -> Result<&mut TCB, KernelError> {
+    pub fn current_thread_mut(&mut self) -> Result<&mut Tcb, KernelError> {
         self.get_tcb_mut(self.current_thread.tcb_ref)
     }
 
     #[inline]
-    pub fn get_tcb(&self, tcb_ref: ThreadRef) -> Result<&TCB, KernelError> {
+    pub fn get_tcb(&self, tcb_ref: ThreadRef) -> Result<&Tcb, KernelError> {
         self.tcbs.get(*tcb_ref).ok_or(KernelError::InvalidThreadRef)
     }
 
     #[inline]
-    pub fn get_tcb_mut(&mut self, tcb_ref: ThreadRef) -> Result<&mut TCB, KernelError> {
+    pub fn get_tcb_mut(&mut self, tcb_ref: ThreadRef) -> Result<&mut Tcb, KernelError> {
         self.tcbs
             .get_mut(*tcb_ref)
             .ok_or(KernelError::InvalidThreadRef)
@@ -564,14 +635,15 @@ pub enum KernelError {
     WrongCapabilityType,
     StackExhausted,
     InvalidTaskPtr,
+    InitTCBNotFound,
     ABI(abi::Error),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TaskRef(pub usize);
 
 #[repr(C)]
-pub(crate) struct TCB {
+pub(crate) struct Tcb {
     saved_state: arch::SavedThreadState,
     task: TaskRef, // Maybe use RC for this
     req_queue: List<IPCMsg>,
@@ -582,9 +654,10 @@ pub(crate) struct TCB {
     capabilities: List<CapEntry>,
     stack_pointer: usize,
     entrypoint: usize,
+    epoch: usize,
 }
 
-impl TCB {
+impl Tcb {
     pub fn new(
         task: TaskRef,
         stack_pointer: usize,
@@ -592,6 +665,7 @@ impl TCB {
         budget: usize,
         cooldown: usize,
         entrypoint: usize,
+        epoch: usize,
     ) -> Self {
         Self {
             task,
@@ -606,27 +680,41 @@ impl TCB {
             stack_pointer,
             entrypoint,
             saved_state: Default::default(),
+            epoch,
         }
     }
 
-    fn capability(&self, cap_ref: CapRef) -> Result<&Cap, KernelError> {
+    #[inline]
+    fn cap_entry(&self, cap_ref: CapRef) -> Result<&CapEntry, KernelError> {
         for c in self.capabilities.iter() {
             let c_addr = (c as *const CapEntry).addr();
             if c_addr == *cap_ref {
-                return Ok(&c.cap);
+                return Ok(c);
             }
         }
         Err(KernelError::InvalidCapRef)
     }
 
-    fn endpoint(&self, cap_ref: CapRef) -> Result<Endpoint, KernelError> {
-        let dest_cap = self.capability(cap_ref)?;
-        let endpoint = if let Cap::Endpoint(endpoint) = dest_cap {
+    #[allow(dead_code)]
+    fn capability(&self, cap_ref: CapRef) -> Result<&Cap, KernelError> {
+        self.cap_entry(cap_ref).map(|e| &e.cap)
+    }
+
+    fn endpoint(&mut self, cap_ref: CapRef) -> Result<Endpoint, KernelError> {
+        let dest_cap = self.cap_entry(cap_ref)?;
+        let endpoint = if let Cap::Endpoint(endpoint) = dest_cap.cap {
             endpoint
         } else {
             return Err(KernelError::WrongCapabilityType);
         };
-        Ok(*endpoint)
+        if endpoint.disposable {
+            // Safety: this function is marked as unsafe, because the user must guarentee that
+            // the item is in the list. dest_cap comes from self.capabilities, so this is safe
+            unsafe {
+                self.capabilities.remove(dest_cap.into());
+            }
+        }
+        Ok(endpoint)
     }
 
     pub fn add_cap(&mut self, cap: Cap) {
@@ -684,6 +772,7 @@ impl TCB {
             let cap_ptr = &*self.capabilities.back().unwrap() as *const CapEntry;
             recv_resp.cap = Some(CapRef(cap_ptr.addr()));
         }
+        drop(msg);
         Ok(true)
     }
 }
@@ -721,26 +810,41 @@ enum ThreadState {
 pub(crate) struct Task {
     region_table: RegionTable,
     stack_size: usize,
+    initial_stack_ptr: Range<usize>,
     available_stack_ptr: Vec<Range<usize>, 8>,
     pub entrypoint: TaskPtr<'static, fn() -> !>,
     secure: bool,
+    state: TaskState,
+}
+
+#[repr(u8)]
+#[derive(Clone, PartialEq)]
+enum TaskState {
+    Pending,
+    Started,
 }
 
 impl Task {
     pub fn new(
         region_table: RegionTable,
         stack_size: usize,
-        available_stack_ptr: Vec<Range<usize>, 8>,
+        initial_stack_ptr: Range<usize>,
         entrypoint: TaskPtr<'static, fn() -> !>,
         secure: bool,
     ) -> Self {
         Self {
             region_table,
             stack_size,
-            available_stack_ptr,
+            available_stack_ptr: Vec::from_slice(&[initial_stack_ptr.clone()]).unwrap(),
+            initial_stack_ptr,
             secure,
             entrypoint,
+            state: TaskState::Pending,
         }
+    }
+
+    fn reset_stack_ptr(&mut self) {
+        self.available_stack_ptr = Vec::from_slice(&[self.initial_stack_ptr.clone()]).unwrap()
     }
 
     fn validate_ptr<'a, T: core::ptr::Pointee + ?Sized>(
@@ -844,7 +948,7 @@ pub struct TaskDesc {
 
 impl TaskDesc {
     fn region_table(&self) -> RegionTable {
-        let table = RegionTable {
+        RegionTable {
             regions: Vec::from_slice(&[
                 Region {
                     range: self.flash_region.clone(),
@@ -856,7 +960,6 @@ impl TaskDesc {
                 },
             ])
             .unwrap(),
-        };
-        table
+        }
     }
 }

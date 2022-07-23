@@ -13,7 +13,7 @@ use rtt_target::{rtt_init, UpChannel};
 use crate::{
     regions::{Region, RegionAttr, RegionTable},
     task_ptr::{TaskPtr, TaskPtrMut},
-    Kernel, Task, TaskDesc, TCB,
+    Kernel, Task, TaskDesc, Tcb,
 };
 
 const INITIAL_PSR: u32 = 1 << 24;
@@ -22,7 +22,7 @@ const EXC_RETURN: u32 = 0xFFFFFFED; //FIXME(sphw): this is only correct on v8m i
 static mut KERNEL_INIT: AtomicBool = AtomicBool::new(false);
 static mut KERNEL: MaybeUninit<Kernel> = MaybeUninit::uninit();
 #[no_mangle]
-static mut CURRENT_TCB: AtomicPtr<TCB> = AtomicPtr::new(ptr::null_mut());
+static mut CURRENT_TCB: AtomicPtr<Tcb> = AtomicPtr::new(ptr::null_mut());
 
 pub(crate) fn init_kernel<'k, 't>(tasks: &'t [TaskDesc]) -> &'k mut Kernel {
     // Safety: this is all unsafe due to the use of static mut, but its a kernel so watcha gonna do
@@ -42,11 +42,11 @@ unsafe fn kernel() -> *mut Kernel {
     KERNEL.as_mut_ptr()
 }
 
-unsafe fn set_current_tcb(task: &TCB) {
-    CURRENT_TCB.store(task as *const TCB as *mut TCB, Ordering::SeqCst);
+unsafe fn set_current_tcb(task: &Tcb) {
+    CURRENT_TCB.store(task as *const Tcb as *mut Tcb, Ordering::SeqCst);
 }
 
-pub(crate) fn start_root_task(task: &Task, tcb: &TCB) -> ! {
+pub(crate) fn start_root_task(task: &Task, tcb: &Tcb) -> ! {
     apply_region_table(&task.region_table);
     // Safety: start root ask is only called once when the kernel is initialized
     // This is marked unsafe, since it could allow an invalid pointer being saved to global state
@@ -84,16 +84,14 @@ pub(crate) fn start_root_task(task: &Task, tcb: &TCB) -> ! {
     p.SYST.enable_counter();
     p.SYST.enable_interrupt();
 
-    let mpu = unsafe {
-        // At least by not taking a &mut we're confident we're not violating
-        // aliasing....
-        &*cortex_m::peripheral::MPU::PTR
-    };
+    // Safety: we are creating a lifetime here, but we know
+    // we are the only ones taking it
+    let mpu = unsafe { &*cortex_m::peripheral::MPU::PTR };
 
     const ENABLE: u32 = 0b001;
     const PRIVDEFENA: u32 = 0b100;
-    // Safety: this has no memory safety implications. The worst it can do is
-    // cause us to fault, which is safe. The register API doesn't know this.
+
+    // Safety: cortex_m marks everything as unsafe, even when there are no side-effects.
     unsafe {
         mpu.ctrl.write(ENABLE | PRIVDEFENA);
     }
@@ -121,7 +119,7 @@ pub(crate) fn start_root_task(task: &Task, tcb: &TCB) -> ! {
     }
 }
 
-pub(crate) fn init_tcb_stack(task: &Task, tcb: &mut TCB) {
+pub(crate) fn init_tcb_stack(task: &Task, tcb: &mut Tcb) {
     let stack_addr = tcb.stack_pointer - mem::size_of::<ExceptionFrame>();
     let stack_ptr: TaskPtrMut<ExceptionFrame> =
     // Safety: We are essentially inventing a lifetime here, but its fine because we are the
@@ -137,6 +135,26 @@ pub(crate) fn init_tcb_stack(task: &Task, tcb: &mut TCB) {
     stack_exc_frame.lr = 0xFFFF_FFFF;
     tcb.saved_state.psp = stack_addr as u32;
     tcb.saved_state.exc_return = EXC_RETURN;
+}
+
+pub(crate) fn clear_mem(task: &Task) {
+    let stack = &task.available_stack_ptr[0].start;
+    for region in &task.region_table.regions {
+        if !region.range.contains(stack) {
+            continue;
+        }
+        // Safety: We are creating a lifetime that lasts for the body of this function;
+        // this is safe, because we are in Kernel mode, and are simply wiping the memory
+        let ptr = unsafe {
+            TaskPtrMut::<'_, [u32]>::from_raw_parts(region.range.start, region.range.len() / 32)
+        };
+        let mem = task
+            .validate_mut_ptr(ptr)
+            .expect("pointer not in task memory");
+        for word in mem {
+            *word = 0xdeadf00d;
+        }
+    }
 }
 
 #[repr(C)]
@@ -290,7 +308,7 @@ fn systick_inner() {
     }
 }
 
-fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
+fn syscall_inner(index: SyscallIndex) {
     // Safety: We are safe to access global state due to our interrupt model
     let args = unsafe {
         let tcb = &*CURRENT_TCB.load(Ordering::SeqCst);
@@ -300,10 +318,12 @@ fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
     let kernel = unsafe { &mut *kernel() };
     let (next_tcb, ret) = kernel.syscall(index, args).unwrap();
 
-    // Safety: We are safe to access global state due to our interrupt model,
-    // plus we have thrown away the immutable reference to CURRENT_TCB above
-    let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
-    tcb.saved_state.set_syscall_return(ret);
+    if let Some(ret) = ret {
+        // Safety: We are safe to access global state due to our interrupt model,
+        // plus we have thrown away the immutable reference to CURRENT_TCB above
+        let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
+        tcb.saved_state.set_syscall_return(ret);
+    }
 
     if let Some(tcb_ref) = next_tcb {
         let tcb = kernel.scheduler.get_tcb(tcb_ref).unwrap();
@@ -312,7 +332,6 @@ fn syscall_inner(index: SyscallIndex) -> SyscallReturn {
         // Safety: The TCB comes from the kernel which is stored statically so this is safe
         unsafe { set_current_tcb(tcb) }
     }
-    ret
 }
 
 pub(crate) fn translate_task_ptr<'a, T: ptr::Pointee + ?Sized>(
@@ -345,9 +364,15 @@ fn validate_addr(addr: usize, len: usize, regions: &[Region]) -> bool {
 fn apply_region_table(table: &RegionTable) {
     const DISABLE: u32 = 0b000;
     const PRIVDEFENA: u32 = 0b100;
+    // Safety: We only call this function from syscall and systick handlers, which don't preempt the kernel
+    // So we know we are the only ones using the MPU
     let mpu = unsafe { &*cortex_m::peripheral::MPU::PTR };
+    // Safety: this is all "safe", its just marked as unsafe because cortex_m's registers
+    // are always unsafe
     unsafe {
+        // data memory barrier to force memory sync before this inst, required by the cortex-m manual
         cortex_m::asm::dmb();
+        // disable MPU while we configure
         mpu.ctrl.write(DISABLE | PRIVDEFENA);
     }
 
@@ -355,9 +380,12 @@ fn apply_region_table(table: &RegionTable) {
         apply_region(i, region, mpu);
     }
 
+    // Safety: this is all "safe", its just marked as unsafe because cortex_m's registers
+    // are always unsafe
     unsafe {
         const ENABLE: u32 = 0b001;
         const PRIVDEFENA: u32 = 0b100;
+        // re-enable mpu
         mpu.ctrl.write(ENABLE | PRIVDEFENA);
         // From the ARMv8m MPU manual
         //
@@ -409,22 +437,20 @@ fn apply_region(i: usize, region: &Region, mpu: &cortex_m::peripheral::mpu::Regi
                 | (1 << 0); // enable
 
     let rnr = i as u32;
-    unsafe {
-        mpu.rnr.write(rnr);
-    }
+    // Safety: this just writes the region register, no memory safety impact
+    unsafe { mpu.rnr.write(rnr) };
     if rnr < 4 {
         let mut mair0 = mpu.mair[0].read();
         mair0 |= (mair as u32) << (rnr * 8);
-        unsafe {
-            mpu.mair[0].write(mair0);
-        }
+        // Safety: writes mair0, no memory safety impact
+        unsafe { mpu.mair[0].write(mair0) };
     } else {
         let mut mair1 = mpu.mair[1].read();
         mair1 |= (mair as u32) << ((rnr - 4) * 8);
-        unsafe {
-            mpu.mair[1].write(mair1);
-        }
+        // Safety: writes mair0, no memory safety impact
+        unsafe { mpu.mair[1].write(mair1) };
     }
+    // Safety: write the start and end of the region
     unsafe {
         mpu.rbar.write(rbar);
         mpu.rlar.write(rlar);

@@ -11,6 +11,7 @@ pub fn main() -> ! {
     let caps = userspace::caps().unwrap();
     println!("{:?}", &*caps);
     let mut a: u32 = 20;
+    userspace::panik();
     loop {
         a += 1;
         if a % 50000 == 0 {

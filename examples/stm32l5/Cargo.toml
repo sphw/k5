@@ -6,11 +6,13 @@ name = "stm32l5"
 version = "0.1.0"
 
 [dependencies]
-alloc-cortex-m = { git = "https://github.com/sphw/alloc-cortex-m.git", branch = "version-bumps" }
+# alloc-cortex-m = { git = "https://github.com/sphw/alloc-cortex-m.git", branch = "version-bumps" }
+ alloc-cortex-m = { path = "../../../alloc-cortex-m" }
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
 kernel = { path = "../../kernel" }
 abi = { path = "../../abi" }
+defmt = { version = "0.3", features = ["encoding-raw"] }
 
 [build-dependencies]
 codegen = { path =  "../../codegen" }

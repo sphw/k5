@@ -7,6 +7,7 @@ extern crate alloc;
 use alloc_cortex_m::CortexMHeap;
 use core::{mem::MaybeUninit, panic::PanicInfo};
 use cortex_m_rt::entry;
+use defmt::{error, info};
 
 kernel::include_task_table! {}
 
@@ -27,18 +28,21 @@ fn main() -> ! {
     let foo = kernel.thread(task_table::FOO.priority(7).budget(2).cooldown(5));
     let bar = kernel.thread(task_table::BAR.priority(7).budget(2).cooldown(5));
     kernel.endpoint(bar, foo, 0);
+    info!("booting");
     kernel.start()
 }
 
 #[alloc_error_handler]
 fn oom(_: core::alloc::Layout) -> ! {
+    error!("kernel out of memory");
     loop {
         cortex_m::asm::bkpt();
     }
 }
 
 #[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
+fn panic(info: &PanicInfo) -> ! {
+    error!("kernel panic: {:?}", defmt::Debug2Format(info));
     loop {
         cortex_m::asm::bkpt();
     }

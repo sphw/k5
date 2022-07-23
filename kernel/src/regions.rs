@@ -43,12 +43,11 @@ impl RegionTable {
             } else if self.regions[i].range.contains(&region.range.end) {
                 self.regions[i].range.start = region.range.end; // TODO: Handle case where region.start == new_region.start
             }
-            if inserted_at.is_none() {
-                if region.range.start > self.regions[i].range.end
-                    && region.range.end < self.regions[i + 1].range.start
-                {
-                    inserted_at = Some(i);
-                }
+            if inserted_at.is_none()
+                && region.range.start > self.regions[i].range.end
+                && region.range.end < self.regions[i + 1].range.start
+            {
+                inserted_at = Some(i);
             }
             if inserted_at == Some(i) {
                 self.regions
@@ -81,7 +80,7 @@ impl RegionTable {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Region {
     pub range: Range<usize>,
     pub attr: BitFlags<RegionAttr>,
@@ -89,7 +88,7 @@ pub struct Region {
 
 #[bitflags]
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RegionAttr {
     Write,
     Read,

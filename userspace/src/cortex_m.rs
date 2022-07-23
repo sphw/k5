@@ -263,6 +263,16 @@ pub fn caps() -> Result<CapList, Error> {
     }
 }
 
+pub fn panik() -> ! {
+    unsafe {
+        syscall(
+            SyscallIndex::new().with(SyscallIndex::SYSCALL_FN, SyscallFn::Panik),
+            &mut SyscallArgs::default(),
+        )
+    };
+    loop {} // will never be called sicne we paniked
+}
+
 pub struct CapList {
     buf: [MaybeUninit<abi::CapListEntry>; 10],
     len: usize,

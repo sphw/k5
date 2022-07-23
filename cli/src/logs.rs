@@ -51,7 +51,7 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
         .max()
         .unwrap_or_default()
         + 2;
-    let task_elf_data = config
+    let mut task_elf_data = config
         .tasks
         .iter()
         .map(|t| {
@@ -62,6 +62,7 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
             Ok(elf_data)
         })
         .collect::<Result<Vec<_>>>()?;
+    task_elf_data.insert(0, elf_data.clone());
     let task_elfs = task_elf_data
         .iter()
         .map(|elf_data| {
@@ -79,6 +80,8 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
             Ok(table.new_stream_decoder())
         })
         .collect::<Result<Vec<_>>>()?;
+    let mut task_names: Vec<_> = config.tasks.iter().map(|t| t.name.clone()).collect();
+    task_names.insert(0, "kern".to_string());
     let elf = Elf::parse(&elf_data).map_err(|e| anyhow!(e))?;
     session.core(0).unwrap().reset_and_halt(TIMEOUT)?;
     start_program(session, &elf)?;
@@ -100,7 +103,7 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
                 let buf = &read_buf[start..end];
                 let task_id = read_buf[current_pos] as usize;
                 let elf = &task_elfs[task_id];
-                let task = &config.tasks[task_id];
+                let task_name = &task_names[task_id];
                 let decoder = &mut task_decoders[task_id];
                 decoder.received(buf);
                 loop {
@@ -109,7 +112,7 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
                             println!(
                                 "{}{} {}",
                                 level_string(frame.level()),
-                                format!("{:^fill$}", task.name, fill = task_name_width)
+                                format!("{:^fill$}", task_name, fill = task_name_width)
                                     .bold()
                                     .white()
                                     .on_truecolor(0, 142, 245),
