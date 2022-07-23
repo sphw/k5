@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 defmt = "0.3"
- mycelium-bitfield = { git = "https://github.com/hawkw/mycelium.git" }
+mycelium-bitfield = { git = "https://github.com/hawkw/mycelium.git" }
