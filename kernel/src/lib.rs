@@ -16,7 +16,9 @@ mod builder;
 mod defmt_log;
 mod regions;
 mod registry;
+mod scheduler;
 mod space;
+mod task;
 mod task_ptr;
 mod tcb;
 
@@ -39,16 +41,17 @@ use core::{
     mem::{self, MaybeUninit},
     ops::Range,
     pin::Pin,
-    ptr::NonNull,
 };
 use defmt::error;
 use heapless::Vec;
 use regions::{Region, RegionAttr, RegionTable};
+use scheduler::{Scheduler, ThreadTime};
 use space::Space;
+use task::*;
 use task_ptr::{TaskPtr, TaskPtrMut};
 
-const PRIORITY_COUNT: usize = 8;
-const TCB_CAPACITY: usize = 16;
+pub(crate) const PRIORITY_COUNT: usize = 8;
+pub(crate) const TCB_CAPACITY: usize = 16;
 
 pub struct Kernel {
     pub(crate) scheduler: Scheduler,
@@ -207,23 +210,8 @@ impl Kernel {
             disposable: true,
         };
         self.send_inner(endpoint, msg, Some(reply_endpoint))?;
-        self.wait(endpoint.addr | 0x80000000, out_buf, recv_resp) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
-    }
-
-    pub(crate) fn wait(
-        &mut self,
-        mask: usize,
-        out_buf: TaskPtrMut<'static, [u8]>,
-        recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
-    ) -> Result<ThreadRef, KernelError> {
-        let src = self.scheduler.current_thread_mut()?;
-        src.state = ThreadState::Waiting {
-            addr: mask,
-            out_buf,
-            recv_resp,
-        };
-
-        self.scheduler.wait_current_thread()
+        self.scheduler
+            .wait(endpoint.addr | 0x80000000, out_buf, recv_resp) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
     }
 
     pub(crate) fn start(&mut self) -> ! {
@@ -342,7 +330,7 @@ impl Kernel {
                     };
 
                     Ok((
-                        Some(self.wait(mask as usize, out_buf, recv_resp)?),
+                        Some(self.scheduler.wait(mask as usize, out_buf, recv_resp)?),
                         Some(SyscallReturn::new()),
                     ))
                 } else {
@@ -467,167 +455,6 @@ impl Kernel {
     }
 }
 
-pub(crate) struct Scheduler {
-    tcbs: Space<Tcb, TCB_CAPACITY>,
-    domains: [List<DomainEntry>; PRIORITY_COUNT],
-    exhausted_threads: List<ExhaustedThread>,
-    current_thread: ThreadTime,
-}
-
-impl Scheduler {
-    pub fn spawn(&mut self, tcb: Tcb) -> Result<ThreadRef, KernelError> {
-        let d = self
-            .domains
-            .get_mut(tcb.priority)
-            .ok_or(KernelError::InvalidPriority)?;
-        let tcb_ref = ThreadRef(self.tcbs.push(tcb).ok_or(KernelError::TooManyThreads)?);
-        d.push_back(Box::pin(DomainEntry {
-            tcb_ref: Some(tcb_ref),
-            ..Default::default()
-        }));
-        Ok(tcb_ref)
-    }
-    pub fn next_thread(&mut self, current_priority: usize) -> Option<ThreadRef> {
-        for domain in self
-            .domains
-            .iter_mut()
-            .rev()
-            .take(PRIORITY_COUNT - 1 - current_priority)
-        {
-            if let Some(thread) = domain.pop_front().and_then(|t| t.tcb_ref) {
-                return Some(thread);
-            }
-        }
-        None
-    }
-
-    pub fn add_thread(&mut self, priority: usize, tcb_ref: ThreadRef) -> Result<(), KernelError> {
-        let d = self
-            .domains
-            .get_mut(priority)
-            .ok_or(KernelError::InvalidPriority)?;
-        d.push_back(Box::pin(DomainEntry::new(tcb_ref)));
-        Ok(())
-    }
-
-    pub fn tick(&mut self) -> Result<Option<ThreadRef>, KernelError> {
-        // requeue exhausted threads
-        {
-            let mut cursor = self.exhausted_threads.cursor_front_mut();
-            cursor.move_prev(); // THIS IS PROBABLY WRONG
-            let mut remove_flag = false;
-            while let Some(t) = {
-                if remove_flag {
-                    cursor.remove_current();
-                }
-                cursor.move_next();
-                cursor.current_mut()
-            } {
-                if let Some(tcb_ref) = t.tcb_ref {
-                    if t.decrement() == 0 {
-                        remove_flag = true;
-                        let tcb = self
-                            .tcbs
-                            .get(*tcb_ref)
-                            .ok_or(KernelError::InvalidThreadRef)?;
-                        let d = self
-                            .domains
-                            .get_mut(tcb.priority)
-                            .ok_or(KernelError::InvalidPriority)?;
-                        d.push_back(Box::pin(DomainEntry::new(tcb_ref)));
-                    }
-                }
-            }
-        }
-        self.current_thread.time -= 1;
-        // check if current thread's budget has been surpassed
-        if self.current_thread.time == 0 {
-            let current_tcb = self
-                .tcbs
-                .get(*self.current_thread.tcb_ref)
-                .ok_or(KernelError::InvalidThreadRef)?;
-            let exhausted_thread = ExhaustedThread {
-                tcb_ref: Some(self.current_thread.tcb_ref),
-                time: current_tcb.cooldown,
-                _links: Default::default(),
-            };
-            self.exhausted_threads
-                .push_front(Box::pin(exhausted_thread));
-            let next_thread = self.next_thread(0).unwrap_or_else(ThreadRef::idle);
-            return self.switch_thread(next_thread).map(Some);
-        }
-        let current_tcb = self.current_thread()?;
-        let current_priority = current_tcb.priority;
-        if let Some(next_thread) = self.next_thread(current_priority) {
-            return self.switch_thread(next_thread).map(Some);
-        }
-        Ok(None)
-    }
-
-    fn switch_thread(&mut self, next_thread: ThreadRef) -> Result<ThreadRef, KernelError> {
-        let next_tcb = self
-            .tcbs
-            .get(*next_thread)
-            .ok_or(KernelError::InvalidThreadRef)?;
-        self.current_thread = ThreadTime {
-            tcb_ref: next_thread,
-            time: next_tcb.budget,
-        };
-        Ok(next_thread)
-    }
-
-    fn wait_current_thread(&mut self) -> Result<ThreadRef, KernelError> {
-        let next_thread = self.next_thread(0).unwrap_or_else(ThreadRef::idle);
-        self.switch_thread(next_thread)
-    }
-
-    #[inline]
-    pub fn current_thread(&self) -> Result<&Tcb, KernelError> {
-        self.get_tcb(self.current_thread.tcb_ref)
-    }
-
-    #[inline]
-    pub fn current_thread_mut(&mut self) -> Result<&mut Tcb, KernelError> {
-        self.get_tcb_mut(self.current_thread.tcb_ref)
-    }
-
-    #[inline]
-    pub fn get_tcb(&self, tcb_ref: ThreadRef) -> Result<&Tcb, KernelError> {
-        self.tcbs.get(*tcb_ref).ok_or(KernelError::InvalidThreadRef)
-    }
-
-    #[inline]
-    pub fn get_tcb_mut(&mut self, tcb_ref: ThreadRef) -> Result<&mut Tcb, KernelError> {
-        self.tcbs
-            .get_mut(*tcb_ref)
-            .ok_or(KernelError::InvalidThreadRef)
-    }
-}
-
-#[derive(Default)]
-struct ExhaustedThread {
-    _links: Links<ExhaustedThread>,
-    time: usize,
-    tcb_ref: Option<ThreadRef>,
-}
-
-impl ExhaustedThread {
-    fn decrement(self: Pin<&mut ExhaustedThread>) -> usize {
-        // Safety: We never move the underlying memory, so this is safe
-        unsafe {
-            let s = self.get_unchecked_mut();
-            s.time -= 1;
-            s.time
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ThreadTime {
-    tcb_ref: ThreadRef,
-    time: usize,
-}
-
 #[derive(Debug)]
 pub enum KernelError {
     InvalidPriority,
@@ -674,91 +501,6 @@ enum ThreadState {
     Running,
 }
 
-#[repr(C)]
-#[derive(Clone)]
-pub(crate) struct Task {
-    region_table: RegionTable,
-    stack_size: usize,
-    initial_stack_ptr: Range<usize>,
-    available_stack_ptr: Vec<Range<usize>, 8>,
-    pub entrypoint: TaskPtr<'static, fn() -> !>,
-    secure: bool,
-    state: TaskState,
-}
-
-#[repr(u8)]
-#[derive(Clone, PartialEq)]
-enum TaskState {
-    Pending,
-    Started,
-}
-
-impl Task {
-    pub fn new(
-        region_table: RegionTable,
-        stack_size: usize,
-        initial_stack_ptr: Range<usize>,
-        entrypoint: TaskPtr<'static, fn() -> !>,
-        secure: bool,
-    ) -> Self {
-        Self {
-            region_table,
-            stack_size,
-            available_stack_ptr: Vec::from_slice(&[initial_stack_ptr.clone()]).unwrap(),
-            initial_stack_ptr,
-            secure,
-            entrypoint,
-            state: TaskState::Pending,
-        }
-    }
-
-    fn reset_stack_ptr(&mut self) {
-        self.available_stack_ptr = Vec::from_slice(&[self.initial_stack_ptr.clone()]).unwrap()
-    }
-
-    fn validate_ptr<'a, T: core::ptr::Pointee + ?Sized>(
-        &self,
-        ptr: TaskPtr<'a, T>,
-    ) -> Option<&'a T> {
-        arch::translate_task_ptr(ptr, self)
-    }
-
-    fn validate_mut_ptr<'a, T: core::ptr::Pointee + ?Sized>(
-        &self,
-        ptr: TaskPtrMut<'a, T>,
-    ) -> Option<&'a mut T> {
-        arch::translate_mut_task_ptr(ptr, self)
-    }
-
-    pub(crate) fn alloc_stack(&mut self) -> Option<usize> {
-        for range in &mut self.available_stack_ptr {
-            if range.len() >= self.stack_size {
-                range.start += self.stack_size;
-                return Some(range.start);
-                //TODO: cleanup empty ranges might need to use LL
-            }
-        }
-        None
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn make_stack_available(&mut self, stack_start: usize) {
-        for range in &mut self.available_stack_ptr {
-            if range.start == stack_start + self.stack_size {
-                range.start = stack_start;
-                return;
-            }
-            if range.end == stack_start {
-                range.end = stack_start + self.stack_size;
-                return;
-            }
-        }
-        let _ = self
-            .available_stack_ptr
-            .push(stack_start..stack_start + self.stack_size);
-    }
-}
-
 struct CapEntry {
     _links: list::Links<CapEntry>,
     cap: Cap,
@@ -777,15 +519,16 @@ pub(crate) struct IPCMsgInner {
     body: Box<[u8]>,
 }
 
+#[macro_export]
 macro_rules! linked_impl {
     ($t: ty) => {
         // Safety: there a few safety guarantees outlined in [`cordyceps::Linked`], we uphold all of those
-        unsafe impl cordyceps::Linked<list::Links<$t>> for $t {
+        unsafe impl cordyceps::Linked<cordyceps::list::Links<$t>> for $t {
             type Handle = Pin<Box<Self>>;
 
             fn into_ptr(r: Self::Handle) -> core::ptr::NonNull<Self> {
                 // Safety: this is safe, as long as only cordyceps uses `into_ptr`
-                unsafe { NonNull::from(Box::leak(Pin::into_inner_unchecked(r))) }
+                unsafe { core::ptr::NonNull::from(Box::leak(Pin::into_inner_unchecked(r))) }
             }
 
             unsafe fn from_ptr(ptr: core::ptr::NonNull<Self>) -> Self::Handle {
@@ -794,7 +537,7 @@ macro_rules! linked_impl {
 
             unsafe fn links(
                 target: core::ptr::NonNull<Self>,
-            ) -> core::ptr::NonNull<list::Links<Self>> {
+            ) -> core::ptr::NonNull<cordyceps::list::Links<Self>> {
                 target.cast()
             }
         }
@@ -804,7 +547,6 @@ macro_rules! linked_impl {
 linked_impl! {IPCMsg }
 linked_impl! { DomainEntry }
 linked_impl! { CapEntry }
-linked_impl! { ExhaustedThread }
 
 pub struct TaskDesc {
     pub name: &'static str,
