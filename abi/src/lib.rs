@@ -97,7 +97,6 @@ mycelium_bitfield::bitfield! {
     #[derive( Eq, PartialEq)]
     pub struct SyscallReturn<u64> {
         pub const SYSCALL_TYPE: SyscallReturnType;
-        pub const SYSCALL_CAP = 8;
         pub const SYSCALL_LEN = 22;
         pub const SYSCALL_PTR = 32;
     }
@@ -172,7 +171,9 @@ impl From<Error> for u8 {
 }
 
 #[derive(Clone, Copy, defmt::Format)]
+#[repr(C)]
 pub struct CapRef(pub usize);
+
 impl Deref for CapRef {
     type Target = usize;
 

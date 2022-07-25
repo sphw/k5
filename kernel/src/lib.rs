@@ -18,20 +18,21 @@ mod regions;
 mod registry;
 mod scheduler;
 mod space;
+mod syscalls;
 mod task;
 mod task_ptr;
 mod tcb;
 
+use syscalls::{
+    CallReturn, CallSysCall, CapsCall, LogCall, PanikCall, RecvCall, SendCall, SysCall,
+};
 use tcb::*;
 
 pub use builder::*;
 #[cfg(test)]
 mod tests;
 
-use abi::{
-    Cap, CapListEntry, CapRef, Endpoint, RecvResp, SyscallArgs, SyscallDataType, SyscallIndex,
-    SyscallReturn, SyscallReturnType, ThreadRef,
-};
+use abi::{Cap, CapRef, Endpoint, RecvResp, SyscallArgs, SyscallIndex, ThreadRef};
 use alloc::boxed::Box;
 use cordyceps::{
     list::{self, Links},
@@ -42,7 +43,6 @@ use core::{
     ops::Range,
     pin::Pin,
 };
-use defmt::error;
 use heapless::Vec;
 use regions::{Region, RegionAttr, RegionTable};
 use scheduler::{Scheduler, ThreadTime};
@@ -229,229 +229,27 @@ impl Kernel {
         &mut self,
         index: abi::SyscallIndex,
         args: &SyscallArgs,
-    ) -> Result<(Option<ThreadRef>, Option<SyscallReturn>), KernelError> {
+    ) -> Result<CallReturn, KernelError> {
         match index.get(abi::SyscallIndex::SYSCALL_FN) {
             abi::SyscallFn::Send => {
-                if index.get(SyscallIndex::SYSCALL_ARG_TYPE) == SyscallDataType::Page {
-                    todo!()
-                }
-                let tcb = self.scheduler.current_thread()?;
-                let slice = match self.get_syscall_buf::<1024>(tcb, args) {
-                    Ok(s) => s,
-                    Err(KernelError::ABI(e)) => {
-                        return Ok((None, Some(e.into())));
-                    }
-                    Err(e) => return Err(e),
-                };
-                let msg = Box::from(slice);
-                let cap = CapRef(args.arg3);
-                let priority = tcb.priority;
-                self.send(cap, msg)?;
-                if let Some(thread) = self.scheduler.next_thread(priority) {
-                    Ok((
-                        self.scheduler.switch_thread(thread).map(Some)?,
-                        Some(
-                            SyscallReturn::new()
-                                .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
-                        ),
-                    ))
-                } else {
-                    Ok((
-                        None,
-                        Some(
-                            SyscallReturn::new()
-                                .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
-                        ),
-                    ))
-                }
+                SendCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
             }
             abi::SyscallFn::Call => {
-                if index.get(SyscallIndex::SYSCALL_ARG_TYPE) == SyscallDataType::Page {
-                    todo!()
-                }
-                let tcb = self.scheduler.current_thread()?;
-                let slice = match self.get_syscall_buf::<1024>(tcb, args) {
-                    Ok(s) => s,
-                    Err(KernelError::ABI(e)) => {
-                        return Ok((None, Some(e.into())));
-                    }
-                    Err(e) => return Err(e),
-                };
-                let msg = Box::from(slice);
-                let cap = CapRef(args.arg3);
-                // Safety: the caller is giving over memory to us, to overwrite
-                // TaskPtrMut ensures that the memory belongs to the correct task
-                let out_buf = unsafe {
-                    TaskPtrMut::<'_, [u8]>::from_raw_parts(args.arg5, args.arg6 as usize)
-                };
-                // Safety: the caller is giving over memory to us, to overwrite
-                // TaskPtrMut ensures that the memory belongs to the correct task
-                let recv_resp = unsafe {
-                    TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(args.arg4, ())
-                };
-                let thread = self.call(cap, msg, out_buf, recv_resp)?;
-                Ok((
-                    self.scheduler.switch_thread(thread).map(Some)?,
-                    Some(SyscallReturn::new()),
-                ))
+                CallSysCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
             }
             abi::SyscallFn::Recv => {
-                if index.get(SyscallIndex::SYSCALL_ARG_TYPE) == SyscallDataType::Page {
-                    todo!()
-                }
-
-                // Safety: the caller is giving over memory to us, to overwrite
-                // TaskPtrMut ensures that the memory belongs to the correct task
-                let out_buf = unsafe {
-                    TaskPtrMut::<'_, [u8]>::from_raw_parts(args.arg1, args.arg2 as usize)
-                };
-                // Safety: the caller is giving over memory to us, to overwrite
-                // TaskPtrMut ensures that the memory belongs to the correct task
-                let recv_resp = unsafe {
-                    TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(args.arg4, ())
-                };
-
-                let tcb = self.scheduler.current_thread_mut()?;
-                let task = self
-                    .tasks
-                    .get(tcb.task.0)
-                    .ok_or(KernelError::InvalidTaskRef)?;
-                let mask = args.arg3;
-                if !tcb.recv(task, mask, out_buf, recv_resp)? {
-                    // Safety: the caller is giving over memory to us, to overwrite
-                    // TaskPtrMut ensures that the memory belongs to the correct task
-                    let out_buf = unsafe {
-                        TaskPtrMut::<'_, [u8]>::from_raw_parts(args.arg1, args.arg2 as usize)
-                    };
-                    // Safety: the caller is giving over memory to us, to overwrite
-                    // TaskPtrMut ensures that the memory belongs to the correct task
-                    let recv_resp = unsafe {
-                        TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(args.arg4, ())
-                    };
-
-                    Ok((
-                        Some(self.scheduler.wait(mask as usize, out_buf, recv_resp)?),
-                        Some(SyscallReturn::new()),
-                    ))
-                } else {
-                    Ok((None, Some(SyscallReturn::new())))
-                }
+                RecvCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
             }
             abi::SyscallFn::Log => {
-                let tcb = self.scheduler.current_thread()?;
-                let log_buf = match self.get_syscall_buf::<255>(tcb, args) {
-                    Ok(s) => s,
-                    Err(KernelError::ABI(e)) => {
-                        return Ok((None, Some(e.into())));
-                    }
-                    Err(e) => return Err(e),
-                };
-                crate::defmt_log::log(tcb.task.0 as u8 + 1, log_buf);
-                Ok((None, Some(SyscallReturn::new())))
+                LogCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
             }
             abi::SyscallFn::Caps => {
-                let tcb = self.scheduler.current_thread()?;
-                let task = self.task(tcb.task)?;
-                // Safety: the caller is giving over memory to us, to overwrite
-                // TaskPtrMut ensures that the memory belongs to the correct task
-                let slice = unsafe {
-                    TaskPtrMut::<'_, [CapListEntry]>::from_raw_parts(args.arg1, args.arg2)
-                };
-                let slice = task
-                    .validate_mut_ptr(slice)
-                    .ok_or(KernelError::InvalidTaskPtr)?;
-                let len = slice.len().min(tcb.capabilities.len());
-                for (i, entry) in tcb.capabilities.iter().take(len).enumerate() {
-                    slice[i] = abi::CapListEntry {
-                        cap_ref: CapRef((entry as *const CapEntry).addr()),
-                        desc: entry.cap.clone(),
-                    };
-                }
-                let ret = SyscallReturn::new()
-                    .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy)
-                    .with(SyscallReturn::SYSCALL_LEN, len as u64);
-                Ok((None, Some(ret)))
+                CapsCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
             }
             abi::SyscallFn::Panik => {
-                let tcb = self.scheduler.current_thread()?;
-                let task_ref = tcb.task;
-                error!("task {:?} paniked", task_ref.0);
-                for domain in &mut self.scheduler.domains {
-                    let mut cursor = domain.cursor_front_mut();
-                    cursor.move_prev();
-                    while let Some(entry) = { cursor.next() } {
-                        if entry
-                            .tcb_ref
-                            .and_then(|t| self.scheduler.tcbs.get(*t))
-                            .is_some()
-                        {
-                            cursor.remove_current();
-                        }
-                    }
-                }
-                let mut priority = None;
-                let mut budget = None;
-                let mut cooldown = None;
-                let task = self
-                    .tasks
-                    .get_mut(task_ref.0)
-                    .ok_or(KernelError::InvalidTaskRef)?;
-                task.state = TaskState::Pending;
-                task.reset_stack_ptr();
-                let task = self
-                    .tasks
-                    .get(task_ref.0)
-                    .ok_or(KernelError::InvalidTaskRef)?;
-                for i in 0..16 {
-                    if let Some(tcb) = self.scheduler.tcbs.get(i) {
-                        if tcb.task == task_ref {
-                            if tcb.entrypoint == task.entrypoint.addr() {
-                                priority = Some(tcb.priority);
-                                budget = Some(tcb.budget);
-                                cooldown = Some(tcb.cooldown);
-                            }
-                            self.scheduler.tcbs.remove(i);
-                        }
-                    }
-                }
-                let (priority, budget, cooldown) = if let Some(priority) = priority && let Some(budget) = budget && let Some(cooldown) = cooldown {
-                    (priority, budget, cooldown)
-                }else {
-                    return Err(KernelError:: InitTCBNotFound);
-                };
-                self.spawn_thread(task_ref, priority, budget, cooldown, task.entrypoint)?;
-                let next_thread = self
-                    .scheduler
-                    .next_thread(0)
-                    .unwrap_or_else(ThreadRef::idle);
-                let next_thread = self.scheduler.switch_thread(next_thread)?;
-                Ok((Some(next_thread), None))
+                PanikCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
             }
         }
-    }
-
-    #[inline(always)]
-    fn get_syscall_buf<const N: usize>(
-        &self,
-        tcb: &Tcb,
-        args: &SyscallArgs,
-    ) -> Result<&[u8], KernelError> {
-        let task = self
-            .tasks
-            .get(tcb.task.0)
-            .ok_or(KernelError::InvalidTaskRef)?;
-        // Safety: the caller is giving over memory to us, to overwrite
-        // TaskPtrMut ensures that the memory belongs to the correct task
-        let slice = unsafe { TaskPtr::<'_, [u8]>::from_raw_parts(args.arg1, args.arg2 as usize) };
-        let slice = if let Some(buf) = task.validate_ptr(slice) {
-            buf
-        } else {
-            return Err(KernelError::ABI(abi::Error::BadAccess));
-        };
-        if slice.len() > N {
-            return Err(KernelError::ABI(abi::Error::BufferOverflow));
-        }
-        Ok(slice)
     }
 }
 

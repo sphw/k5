@@ -10,7 +10,8 @@ chip = "STM32L562QEIxQ"
 crate_path = "./"
 ram_size   = 0x20000
 stack_size = 0x00004
-flash_size = 0x30000
+#flash_size = 0x9000 # min size
+flash_size = 0x10000
 
 [[tasks]]
 name = "idle"

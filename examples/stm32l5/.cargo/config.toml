@@ -22,3 +22,7 @@ rustflags = [
 # target = "thumbv8m.base-none-eabi"   # Cortex-M23
 # target = "thumbv8m.main-none-eabi"   # Cortex-M33 (no FPU)
 target = "thumbv8m.main-none-eabihf" # Cortex-M33 (with FPU)
+
+[profile.dev]
+opt-level = "z"
+lto = true
