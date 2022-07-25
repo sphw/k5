@@ -32,6 +32,7 @@ impl Tcb {
         cooldown: usize,
         entrypoint: usize,
         epoch: usize,
+        caps: List<CapEntry>,
     ) -> Self {
         Self {
             task,
@@ -42,7 +43,7 @@ impl Tcb {
             priority,
             budget,
             cooldown,
-            capabilities: List::new(),
+            capabilities: caps,
             stack_pointer,
             entrypoint,
             saved_state: Default::default(),
@@ -61,8 +62,7 @@ impl Tcb {
         Err(KernelError::InvalidCapRef)
     }
 
-    #[allow(dead_code)]
-    fn capability(&self, cap_ref: CapRef) -> Result<&Cap, KernelError> {
+    pub(crate) fn cap(&self, cap_ref: CapRef) -> Result<&Cap, KernelError> {
         self.cap_entry(cap_ref).map(|e| &e.cap)
     }
 
@@ -71,7 +71,7 @@ impl Tcb {
         let endpoint = if let Cap::Endpoint(endpoint) = dest_cap.cap {
             endpoint
         } else {
-            return Err(KernelError::WrongCapabilityType);
+            return Err(KernelError::ABI(abi::Error::InvalidCap));
         };
         if endpoint.disposable {
             // Safety: this function is marked as unsafe, because the user must guarentee that

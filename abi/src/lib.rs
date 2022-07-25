@@ -18,12 +18,14 @@ mycelium_bitfield::bitfield! {
 #[derive(Debug)]
 #[repr(u8)]
 pub enum SyscallFn {
-    Send = 0b0001,
-    Call = 0b0010,
-    Recv = 0b0011,
-    Log = 0b0101,
-    Caps = 0b0111,
-    Panik = 0b0110,
+    Send = 0x0,
+    Call = 0x1,
+    Recv = 0x2,
+    Log = 0x3,
+    Caps = 0x4,
+    Panik = 0x5,
+    Connect = 0x6,
+    Listen = 0x7,
 }
 
 impl FromBits<u32> for SyscallFn {
@@ -38,6 +40,8 @@ impl FromBits<u32> for SyscallFn {
             bits if bits == Self::Log as u8 => Ok(Self::Log),
             bits if bits == Self::Caps as u8 => Ok(Self::Caps),
             bits if bits == Self::Panik as u8 => Ok(Self::Panik),
+            bits if bits == Self::Connect as u8 => Ok(Self::Connect),
+            bits if bits == Self::Listen as u8 => Ok(Self::Listen),
             _ => Err("expected valid syscall fn identifier"),
         }
     }
@@ -143,6 +147,7 @@ pub enum Error {
     BadAccess,
     BufferOverflow,
     PortNotOpen,
+    InvalidCap,
     Unknown(u8),
 }
 
@@ -153,6 +158,7 @@ impl From<u8> for Error {
             2 => Error::BadAccess,
             3 => Error::BufferOverflow,
             4 => Error::PortNotOpen,
+            5 => Error::InvalidCap,
             code => Error::Unknown(code),
         }
     }
@@ -165,6 +171,7 @@ impl From<Error> for u8 {
             Error::BadAccess => 2,
             Error::BufferOverflow => 3,
             Error::PortNotOpen => 4,
+            Error::InvalidCap => 5,
             Error::Unknown(code) => code,
         }
     }

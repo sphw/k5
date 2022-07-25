@@ -15,14 +15,15 @@ pub struct Endpoint {
     pub disposable: bool,
 }
 
-#[derive(Clone, defmt::Format)]
-#[repr(C)]
+pub type PortId = [u8; 16];
 
+#[derive(Clone, Copy, defmt::Format)]
+#[repr(C)]
 pub struct Listen {
-    pub port: [u8; 10],
+    pub port: PortId,
 }
-#[derive(Clone, defmt::Format)]
+#[derive(Clone, Copy, defmt::Format)]
 #[repr(C)]
 pub struct Connect {
-    pub port: [u8; 10],
+    pub port: PortId,
 }

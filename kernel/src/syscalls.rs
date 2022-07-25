@@ -1,7 +1,8 @@
 use core::mem::{self, MaybeUninit};
 
 use abi::{
-    CapListEntry, CapRef, RecvResp, SyscallArgs, SyscallDataType, SyscallReturnType, ThreadRef,
+    Cap, CapListEntry, CapRef, RecvResp, SyscallArgs, SyscallDataType, SyscallReturn,
+    SyscallReturnType, ThreadRef,
 };
 use defmt::error;
 
@@ -243,9 +244,6 @@ unsafe impl SysCall for PanikCall {
                 }
             }
         }
-        let mut priority = None;
-        let mut budget = None;
-        let mut cooldown = None;
         let task = kern
             .tasks
             .get_mut(task_ref.0)
@@ -256,30 +254,100 @@ unsafe impl SysCall for PanikCall {
             .tasks
             .get(task_ref.0)
             .ok_or(KernelError::InvalidTaskRef)?;
+        let mut priority = None;
+        let mut budget = None;
+        let mut cooldown = None;
+        let mut caps = None;
+
         for i in 0..16 {
             if let Some(tcb) = kern.scheduler.tcbs.get(i) {
                 if tcb.task == task_ref {
+                    let tcb = kern.scheduler.tcbs.remove(i).unwrap();
                     if tcb.entrypoint == task.entrypoint.addr() {
                         priority = Some(tcb.priority);
                         budget = Some(tcb.budget);
                         cooldown = Some(tcb.cooldown);
+                        caps = Some(tcb.capabilities);
                     }
-                    kern.scheduler.tcbs.remove(i);
                 }
             }
         }
-        let (priority, budget, cooldown) = if let Some(priority) = priority && let Some(budget) = budget && let Some(cooldown) = cooldown {
-                    (priority, budget, cooldown)
+        let (priority, budget, cooldown, caps) = if let Some(priority) = priority && let Some(budget) = budget && let Some(cooldown) = cooldown && let Some(caps) =  caps {
+                    (priority, budget, cooldown, caps)
                 }else {
                     return Err(KernelError:: InitTCBNotFound);
                 };
-        kern.spawn_thread(task_ref, priority, budget, cooldown, task.entrypoint)?;
+        kern.spawn_thread(task_ref, priority, budget, cooldown, task.entrypoint, caps)?;
         let next_thread = kern
             .scheduler
             .next_thread(0)
             .unwrap_or_else(ThreadRef::idle);
         let next_thread = kern.scheduler.switch_thread(next_thread)?;
         Ok(CallReturn::Replace { next_thread })
+    }
+}
+
+#[repr(C)]
+pub(crate) struct ListenCall {
+    cap_ref: CapRef,
+}
+
+unsafe impl SysCall for ListenCall {
+    fn exec(
+        &self,
+        _arg_type: SyscallDataType,
+        kern: &mut Kernel,
+    ) -> Result<CallReturn, KernelError> {
+        let tcb = kern.scheduler.current_thread()?;
+        let listen = match tcb.cap(self.cap_ref)? {
+            abi::Cap::Listen(listen) => listen,
+            _ => {
+                return Err(KernelError::ABI(abi::Error::InvalidCap));
+            }
+        };
+        kern.registry
+            .listen(
+                *listen,
+                abi::Endpoint {
+                    tcb_ref: kern.scheduler.current_thread.tcb_ref,
+                    addr: 0,
+                    disposable: false,
+                },
+            )
+            .map_err(KernelError::ABI)?;
+        Ok(CallReturn::Return {
+            ret: SyscallReturn::new().with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+        })
+    }
+}
+
+#[repr(C)]
+pub(crate) struct ConnectCall {
+    cap_ref: CapRef,
+}
+
+unsafe impl SysCall for ConnectCall {
+    fn exec(
+        &self,
+        _arg_type: SyscallDataType,
+        kern: &mut Kernel,
+    ) -> Result<CallReturn, KernelError> {
+        let tcb = kern.scheduler.current_thread_mut()?;
+        let connect = match tcb.cap(self.cap_ref)? {
+            abi::Cap::Connect(connect) => connect,
+            _ => {
+                return Err(KernelError::ABI(abi::Error::InvalidCap));
+            }
+        };
+        let endpoint = kern.registry.connect(*connect).map_err(KernelError::ABI)?;
+        tcb.add_cap(Cap::Endpoint(endpoint));
+        let entry = tcb.capabilities.back().unwrap();
+        let cap_ref = (entry.get_ref() as *const CapEntry).addr();
+        Ok(CallReturn::Return {
+            ret: SyscallReturn::new()
+                .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy)
+                .with(SyscallReturn::SYSCALL_PTR, cap_ref as u64),
+        })
     }
 }
 

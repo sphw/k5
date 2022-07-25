@@ -23,8 +23,10 @@ mod task;
 mod task_ptr;
 mod tcb;
 
+use registry::Registry;
 use syscalls::{
-    CallReturn, CallSysCall, CapsCall, LogCall, PanikCall, RecvCall, SendCall, SysCall,
+    CallReturn, CallSysCall, CapsCall, ConnectCall, ListenCall, LogCall, PanikCall, RecvCall,
+    SendCall, SysCall,
 };
 use tcb::*;
 
@@ -55,6 +57,7 @@ pub(crate) const TCB_CAPACITY: usize = 16;
 
 pub struct Kernel {
     pub(crate) scheduler: Scheduler,
+    pub(crate) registry: Registry,
     epoch: usize,
     tasks: Vec<Task, 5>,
 }
@@ -98,6 +101,7 @@ impl Kernel {
                 exhausted_threads: List::new(),
                 domains,
             },
+            registry: Registry::default(),
             epoch: 0,
             tasks,
         })
@@ -110,6 +114,7 @@ impl Kernel {
         budget: usize,
         cooldown: usize,
         entrypoint: TaskPtr<'static, fn() -> !>,
+        caps: List<CapEntry>,
     ) -> Result<ThreadRef, KernelError> {
         let epoch = self.epoch;
         let task = self.task_mut(task_ref)?;
@@ -129,6 +134,7 @@ impl Kernel {
             cooldown,
             entrypoint_addr,
             epoch,
+            caps,
         );
         arch::init_tcb_stack(task, &mut tcb);
         self.scheduler.spawn(tcb)
@@ -249,6 +255,12 @@ impl Kernel {
             abi::SyscallFn::Panik => {
                 PanikCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
             }
+            abi::SyscallFn::Connect => {
+                ConnectCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
+            }
+            abi::SyscallFn::Listen => {
+                ListenCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
+            }
         }
     }
 }
@@ -261,7 +273,6 @@ pub enum KernelError {
     InvalidEntrypoint,
     TooManyThreads,
     InvalidCapRef,
-    WrongCapabilityType,
     StackExhausted,
     InvalidTaskPtr,
     InitTCBNotFound,
