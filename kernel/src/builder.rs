@@ -1,6 +1,8 @@
-use abi::{Cap, Endpoint, ThreadRef};
+use abi::{Cap, Endpoint, Listen, PortId, ThreadRef};
+use alloc::boxed::Box;
+use cordyceps::List;
 
-use crate::{Kernel, TaskDesc, TaskRef};
+use crate::{CapEntry, Kernel, TaskDesc, TaskRef};
 
 /// Builder for creating and booting the k5 kernel
 ///
@@ -48,6 +50,7 @@ impl KernelBuilder<'_> {
                 thread.budget,
                 thread.cooldown,
                 entrypoint,
+                thread.caps,
             )
             .unwrap()
     }
@@ -59,13 +62,7 @@ impl KernelBuilder<'_> {
         let entrypoint = task.entrypoint;
         let t = self
             .kernel
-            .spawn_thread(
-                task_ref,
-                thread.priority,
-                thread.budget,
-                thread.cooldown,
-                entrypoint,
-            )
+            .spawn_thread(task_ref, 0, usize::MAX, 0, entrypoint, thread.caps)
             .unwrap();
 
         self.idle_task_set = true;
@@ -103,6 +100,7 @@ pub struct ThreadBuilder {
     priority: usize,
     budget: usize,
     cooldown: usize,
+    caps: List<CapEntry>,
 }
 
 impl ThreadBuilder {
@@ -117,6 +115,7 @@ impl ThreadBuilder {
             priority: 0,
             budget: usize::MAX,
             cooldown: 0,
+            caps: List::new(),
         }
     }
 
@@ -142,6 +141,24 @@ impl ThreadBuilder {
     /// A thread's cooldown is the number of ticks before it get rescheduled after its budget is exhausted
     pub fn cooldown(mut self, c: usize) -> Self {
         self.cooldown = c;
+        self
+    }
+
+    /// Adds a listen cap to the thread
+    pub fn listen(mut self, port: PortId) -> Self {
+        self.caps.push_back(Box::pin(CapEntry {
+            cap: Cap::Listen(Listen { port }),
+            _links: Default::default(),
+        }));
+        self
+    }
+
+    /// Adds a connect cap to the thread
+    pub fn connect(mut self, port: PortId) -> Self {
+        self.caps.push_back(Box::pin(CapEntry {
+            cap: Cap::Connect(abi::Connect { port }),
+            _links: Default::default(),
+        }));
         self
     }
 }

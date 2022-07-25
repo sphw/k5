@@ -10,8 +10,9 @@ use userspace::CapExt;
 pub fn main() -> ! {
     let caps = userspace::caps().unwrap();
     println!("{:?}", &*caps);
+    let endpoint = caps[0].cap_ref.connect().unwrap();
+    println!("connected: {:?}", endpoint);
     let mut a: u32 = 20;
-    userspace::panik();
     loop {
         a += 1;
         if a % 50000 == 0 {
@@ -19,7 +20,7 @@ pub fn main() -> ! {
             buf[0..4].copy_from_slice(&a.to_be_bytes());
             info!("send {:?}", buf);
             let mut resp_buf = [0; 10];
-            let resp = caps[0].cap_ref.call(&mut buf, &mut resp_buf);
+            let resp = endpoint.call(&mut buf, &mut resp_buf);
             info!("resp {:?}, buf: {:?}", resp, resp_buf);
         }
     }

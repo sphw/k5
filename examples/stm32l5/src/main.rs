@@ -25,8 +25,20 @@ fn main() -> ! {
     }
     let mut kernel = kernel::KernelBuilder::new(task_table::TASKS);
     let _idle = kernel.idle_thread(task_table::IDLE);
-    let foo = kernel.thread(task_table::FOO.priority(7).budget(2).cooldown(5));
-    let bar = kernel.thread(task_table::BAR.priority(7).budget(2).cooldown(5));
+    let foo = kernel.thread(
+        task_table::FOO
+            .priority(7)
+            .budget(2)
+            .cooldown(5)
+            .listen(*b"0123456789abcdef"),
+    );
+    let bar = kernel.thread(
+        task_table::BAR
+            .priority(7)
+            .budget(2)
+            .cooldown(5)
+            .connect(*b"0123456789abcdef"),
+    );
     kernel.endpoint(bar, foo, 0);
     info!("booting");
     kernel.start()

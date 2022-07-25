@@ -172,6 +172,10 @@ pub trait CapExt {
     fn call<T: ?Sized>(&self, request: &mut T, out_buf: &mut T) -> Result<RecvResp, Error>;
     /// Sends a request to the capability, and returns ASAP
     fn send<T: ?Sized>(&self, request: &mut T) -> Result<(), Error>;
+    /// Listens to the port on the specified capability
+    fn listen(&self) -> Result<(), Error>;
+    /// Connects to the port, and returns an endpoint one can second messages to
+    fn connect(&self) -> Result<CapRef, Error>;
 }
 
 impl CapExt for CapRef {
@@ -181,6 +185,40 @@ impl CapExt for CapRef {
 
     fn send<T: ?Sized>(&self, r: &mut T) -> Result<(), Error> {
         send_inner(SyscallDataType::Copy, *self, r)
+    }
+
+    fn listen(&self) -> Result<(), Error> {
+        let index = SyscallIndex::new().with(SyscallIndex::SYSCALL_FN, SyscallFn::Listen);
+        let mut args = SyscallArgs {
+            arg1: self.0,
+            ..Default::default()
+        };
+        let res = unsafe { syscall(index, &mut args) };
+        match res.get(SyscallReturn::SYSCALL_TYPE) {
+            SyscallReturnType::Error => {
+                let code = res.get(SyscallReturn::SYSCALL_LEN);
+                Err(abi::Error::from(code as u8))
+            }
+            SyscallReturnType::Copy => Ok(()),
+            _ => Err(abi::Error::ReturnTypeMismatch),
+        }
+    }
+
+    fn connect(&self) -> Result<CapRef, Error> {
+        let index = SyscallIndex::new().with(SyscallIndex::SYSCALL_FN, SyscallFn::Connect);
+        let mut args = SyscallArgs {
+            arg1: self.0,
+            ..Default::default()
+        };
+        let res = unsafe { syscall(index, &mut args) };
+        match res.get(SyscallReturn::SYSCALL_TYPE) {
+            SyscallReturnType::Error => {
+                let code = res.get(SyscallReturn::SYSCALL_LEN);
+                Err(abi::Error::from(code as u8))
+            }
+            SyscallReturnType::Copy => Ok(CapRef(res.get(SyscallReturn::SYSCALL_PTR) as usize)),
+            _ => Err(abi::Error::ReturnTypeMismatch),
+        }
     }
 }
 

@@ -11,7 +11,7 @@ pub fn main() -> ! {
     let mut a: u32 = 20;
     loop {
         a += 1;
-        if a % 500 == 0 {
+        if a % 50000 == 0 {
             info!("idle")
         }
     }

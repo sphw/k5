@@ -1,12 +1,13 @@
+use crate::task::Task;
 use crate::task_ptr::{TaskPtr, TaskPtrMut};
-use crate::{Task, TCB};
+use crate::tcb::Tcb;
 
-pub(crate) fn start_root_task(_task: &Task, _tcb: &TCB) -> ! {
+pub(crate) fn start_root_task(_task: &Task, _tcb: &Tcb) -> ! {
     loop {
         std::thread::sleep(std::time::Duration::from_secs(100));
     }
 }
-pub(crate) fn init_tcb_stack(_task: &Task, _tcb: &mut TCB) {}
+pub(crate) fn init_tcb_stack(_task: &Task, _tcb: &mut Tcb) {}
 
 pub(crate) fn init_kernel<'k, 't>(tasks: &'t [crate::TaskDesc]) -> &'k mut crate::Kernel {
     let _ = crate::Kernel::from_tasks(tasks).unwrap();

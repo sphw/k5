@@ -7,9 +7,11 @@ use core::{
 use cortex_m::peripheral::scb::SystemHandler;
 use mem::MaybeUninit;
 
-use abi::{SyscallArgs, SyscallIndex, SyscallReturn};
+use abi::{SyscallArgs, SyscallIndex, SyscallReturn, SyscallReturnType, ThreadRef};
 use rtt_target::{rtt_init, UpChannel};
 
+use crate::syscalls::CallReturn;
+use crate::KernelError;
 use crate::{
     regions::{Region, RegionAttr, RegionTable},
     task_ptr::{TaskPtr, TaskPtrMut},
@@ -316,22 +318,39 @@ fn syscall_inner(index: SyscallIndex) {
     };
     // Safety: We are safe to access global state due to our interrupt model
     let kernel = unsafe { &mut *kernel() };
-    let (next_tcb, ret) = kernel.syscall(index, args).unwrap();
-
-    if let Some(ret) = ret {
-        // Safety: We are safe to access global state due to our interrupt model,
-        // plus we have thrown away the immutable reference to CURRENT_TCB above
-        let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
-        tcb.saved_state.set_syscall_return(ret);
+    let ret = match kernel.syscall(index, args) {
+        Ok(ret) => ret,
+        Err(KernelError::ABI(err)) => CallReturn::Return {
+            ret: SyscallReturn::new()
+                .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Error)
+                .with(SyscallReturn::SYSCALL_LEN, u8::from(err) as u64),
+        },
+        err => {
+            let _ = err.unwrap();
+            return;
+        }
+    };
+    match ret {
+        CallReturn::Replace { next_thread } => switch_thread(kernel, next_thread),
+        CallReturn::Switch { next_thread, ret } => {
+            let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
+            tcb.saved_state.set_syscall_return(ret);
+            switch_thread(kernel, next_thread)
+        }
+        CallReturn::Return { ret } => {
+            let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
+            tcb.saved_state.set_syscall_return(ret);
+        }
     }
+}
 
-    if let Some(tcb_ref) = next_tcb {
-        let tcb = kernel.scheduler.get_tcb(tcb_ref).unwrap();
-        let task = kernel.task(tcb.task).unwrap();
-        apply_region_table(&task.region_table);
-        // Safety: The TCB comes from the kernel which is stored statically so this is safe
-        unsafe { set_current_tcb(tcb) }
-    }
+#[inline]
+fn switch_thread(kernel: &Kernel, tcb_ref: ThreadRef) {
+    let tcb = kernel.scheduler.get_tcb(tcb_ref).unwrap();
+    let task = kernel.task(tcb.task).unwrap();
+    apply_region_table(&task.region_table);
+    // Safety: The TCB comes from the kernel which is stored statically so this is safe
+    unsafe { set_current_tcb(tcb) }
 }
 
 pub(crate) fn translate_task_ptr<'a, T: ptr::Pointee + ?Sized>(

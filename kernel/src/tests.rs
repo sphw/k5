@@ -6,14 +6,14 @@ fn test_kernel() -> Kernel {
             Task::new(
                 RegionTable::default(),
                 100,
-                Vec::from_slice(&[0..200]).unwrap(),
+                0..200,
                 unsafe { TaskPtr::from_raw_parts(1, ()) },
                 false,
             ),
             Task::new(
                 RegionTable::default(),
                 100,
-                Vec::from_slice(&[0..200]).unwrap(),
+                0..200,
                 unsafe { TaskPtr::from_raw_parts(1, ()) },
                 false,
             ),
@@ -21,7 +21,7 @@ fn test_kernel() -> Kernel {
         .unwrap(),
     )
     .unwrap();
-    let idle = TCB::new(TaskRef(0), 0, 0, usize::MAX, 0, 0, 0);
+    let idle = Tcb::new(TaskRef(0), 0, 0, usize::MAX, 0, 0, 0);
     kernel.scheduler.spawn(idle).unwrap();
     kernel.scheduler.tick().unwrap();
     kernel
@@ -30,8 +30,8 @@ fn test_kernel() -> Kernel {
 #[test]
 fn test_simple_tick_schedule() {
     let mut kernel = test_kernel();
-    let a = TCB::new(TaskRef(1), 0, 7, 5, 6, 0, 0);
-    let b = TCB::new(TaskRef(2), 0, 7, 3, 3, 0, 0);
+    let a = Tcb::new(TaskRef(1), 0, 7, 5, 6, 0, 0);
+    let b = Tcb::new(TaskRef(2), 0, 7, 3, 3, 0, 0);
     kernel.scheduler.spawn(a).unwrap();
     kernel.scheduler.spawn(b).unwrap();
     for _ in 0..5 {
@@ -81,8 +81,8 @@ fn test_simple_tick_schedule() {
 #[test]
 fn test_send_schedule() {
     let mut kernel = test_kernel();
-    let a = TCB::new(TaskRef(1), 0, 7, 5, 6, 0, 0);
-    let mut b = TCB::new(TaskRef(2), 0, 7, 3, 3, 0, 0);
+    let a = Tcb::new(TaskRef(1), 0, 7, 5, 6, 0, 0);
+    let mut b = Tcb::new(TaskRef(2), 0, 7, 3, 3, 0, 0);
     b.add_cap(Cap::Endpoint(Endpoint {
         tcb_ref: ThreadRef(1),
         addr: 1,
@@ -99,6 +99,7 @@ fn test_send_schedule() {
         .expect("should switch to a");
     assert_eq!(*next, 1, "should switch to a");
     let next = kernel
+        .scheduler
         .wait(0x1, unsafe { TaskPtrMut::from_raw_parts(1, 10) }, unsafe {
             TaskPtrMut::from_raw_parts(1, ())
         })
@@ -121,8 +122,8 @@ fn test_send_schedule() {
 #[test]
 fn test_call_schedule() {
     let mut kernel = test_kernel();
-    let a = TCB::new(TaskRef(1), 0, 7, 5, 6, 0, 0);
-    let mut b = TCB::new(TaskRef(2), 0, 7, 3, 3, 0, 0);
+    let a = Tcb::new(TaskRef(1), 0, 7, 5, 6, 0, 0);
+    let mut b = Tcb::new(TaskRef(2), 0, 7, 3, 3, 0, 0);
     b.add_cap(Cap::Endpoint(Endpoint {
         tcb_ref: ThreadRef(1),
         addr: 1,
@@ -143,6 +144,7 @@ fn test_call_schedule() {
         .expect("should switch to a");
     assert_eq!(*next, 1, "should switch to a");
     let next = kernel
+        .scheduler
         .wait(0x1, unsafe { TaskPtrMut::from_raw_parts(0, 0) }, unsafe {
             TaskPtrMut::from_raw_parts(0, ())
         })
@@ -165,7 +167,7 @@ fn test_alloc_stack() {
     let mut task = Task::new(
         RegionTable::default(),
         10,
-        Vec::from_slice(&[0..50]).unwrap(),
+        0..50,
         unsafe { TaskPtr::from_raw_parts(0, ()) },
         false,
     );
