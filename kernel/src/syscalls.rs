@@ -20,12 +20,16 @@ pub(crate) struct SendCall {
     cap_ref: CapRef,
 }
 
-pub unsafe trait SysCall {
+/// # Safety
+/// This trait is safe to implement as long as the user guarentees that `Self` and `SyscallArgs`, have
+/// the less than or equal size and alignment.
+pub(crate) unsafe trait SysCall {
     #[inline]
     fn from_args(args: &SyscallArgs) -> &Self
     where
         Self: Sized,
     {
+        // Safety: this trait will only be implemented for types where this is safe
         unsafe { mem::transmute(args) }
     }
     fn exec(&self, arg_type: SyscallDataType, kern: &mut Kernel)
@@ -34,11 +38,6 @@ pub unsafe trait SysCall {
 
 // Safety: The only requirement for safety in this trait is that the implementer has the same alignment and less than or equal length as [`SyscallArgs`]
 unsafe impl SysCall for SendCall {
-    #[inline]
-    fn from_args(args: &SyscallArgs) -> &Self {
-        unsafe { mem::transmute(args) }
-    }
-
     #[inline]
     fn exec(
         &self,
@@ -92,13 +91,13 @@ unsafe impl SysCall for CallSysCall {
         let tcb = kern.scheduler.current_thread()?;
         let slice = get_buf::<1024>(kern, tcb, self.in_addr, self.in_len)?;
         let msg = alloc::boxed::Box::from(slice);
-        // Safety: the caller is giving over memory to us, to overwrite
-        // TaskPtrMut ensures that the memory belongs to the correct task
         let out_buf =
-            unsafe { TaskPtrMut::<'_, [u8]>::from_raw_parts(self.out_addr, self.out_len) };
         // Safety: the caller is giving over memory to us, to overwrite
         // TaskPtrMut ensures that the memory belongs to the correct task
+            unsafe { TaskPtrMut::<'_, [u8]>::from_raw_parts(self.out_addr, self.out_len) };
         let recv_resp =
+        // Safety: the caller is giving over memory to us, to overwrite
+        // TaskPtrMut ensures that the memory belongs to the correct task
             unsafe { TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(self.resp_addr, ()) };
         let next_thread = kern.call(self.cap_ref, msg, out_buf, recv_resp)?;
         Ok(CallReturn::Switch {
@@ -130,9 +129,9 @@ unsafe impl SysCall for RecvCall {
         // Safety: the caller is giving over memory to us, to overwrite
         // TaskPtrMut ensures that the memory belongs to the correct task
             unsafe { TaskPtrMut::<'_, [u8]>::from_raw_parts(self.out_addr, self.out_len as usize) };
+        let recv_resp =
         // Safety: the caller is giving over memory to us, to overwrite
         // TaskPtrMut ensures that the memory belongs to the correct task
-        let recv_resp =
             unsafe { TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(self.resp_addr, ()) };
         let tcb = kern.scheduler.current_thread_mut()?;
         let task = kern
@@ -140,9 +139,9 @@ unsafe impl SysCall for RecvCall {
             .get(tcb.task.0)
             .ok_or(KernelError::InvalidTaskRef)?;
         if !tcb.recv(task, self.mask, out_buf, recv_resp)? {
+            let out_buf =
             // Safety: the caller is giving over memory to us, to overwrite
             // TaskPtrMut ensures that the memory belongs to the correct task
-            let out_buf =
                 unsafe { TaskPtrMut::<'_, [u8]>::from_raw_parts(self.out_addr, self.out_len) };
             // Safety: the caller is giving over memory to us, to overwrite
             // TaskPtrMut ensures that the memory belongs to the correct task
@@ -198,6 +197,8 @@ unsafe impl SysCall for CapsCall {
     ) -> Result<CallReturn, KernelError> {
         let tcb = kern.scheduler.current_thread()?;
         let task = kern.task(tcb.task)?;
+        // Safety: the caller is giving over memory to us, to overwrite
+        // TaskPtrMut ensures that the memory belongs to the correct task
         let slice = unsafe {
             TaskPtrMut::<'_, [CapListEntry]>::from_raw_parts(self.out_addr, self.out_len)
         };
@@ -220,8 +221,12 @@ unsafe impl SysCall for CapsCall {
 }
 
 #[repr(C)]
-pub(crate) struct PanikCall {}
+pub(crate) struct PanikCall {
+    addr: usize,
+    len: usize,
+}
 
+// Safety: The only requirement for safety in this trait is that the implementer has the same alignment and less than or equal length as [`SyscallArgs`]
 unsafe impl SysCall for PanikCall {
     fn exec(
         &self,
@@ -230,7 +235,12 @@ unsafe impl SysCall for PanikCall {
     ) -> Result<CallReturn, KernelError> {
         let tcb = kern.scheduler.current_thread()?;
         let task_ref = tcb.task;
-        error!("task {:?} paniked", task_ref.0);
+        let buf = get_buf::<512>(kern, tcb, self.addr, self.len)?;
+        if let Ok(s) = core::str::from_utf8(buf) {
+            error!("task {:?} paniked: {}", task_ref.0, s);
+        } else {
+            error!("task {:?} paniked with invalid msg", task_ref.0);
+        }
         for domain in &mut kern.scheduler.domains {
             let mut cursor = domain.cursor_front_mut();
             cursor.move_prev();
@@ -292,6 +302,7 @@ pub(crate) struct ListenCall {
     cap_ref: CapRef,
 }
 
+// Safety: The only requirement for safety in this trait is that the implementer has the same alignment and less than or equal length as [`SyscallArgs`]
 unsafe impl SysCall for ListenCall {
     fn exec(
         &self,
@@ -326,6 +337,7 @@ pub(crate) struct ConnectCall {
     cap_ref: CapRef,
 }
 
+// Safety: The only requirement for safety in this trait is that the implementer has the same alignment and less than or equal length as [`SyscallArgs`]
 unsafe impl SysCall for ConnectCall {
     fn exec(
         &self,

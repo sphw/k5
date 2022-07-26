@@ -9,7 +9,7 @@ use userspace::CapExt;
 pub fn main() -> ! {
     let caps = userspace::caps().unwrap();
     defmt::println!("{:?}", &*caps);
-    caps[0].cap_ref.listen().unwrap();
+    caps[3].cap_ref.listen().unwrap();
     defmt::println!("listen");
     let mut buf = [0u8; 10];
     loop {
@@ -28,10 +28,4 @@ pub fn main() -> ! {
             }
         }
     }
-}
-
-#[cfg(target_os = "none")]
-#[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
-    loop {}
 }

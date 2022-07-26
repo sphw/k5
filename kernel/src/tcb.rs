@@ -24,6 +24,8 @@ pub(crate) struct Tcb {
 }
 
 impl Tcb {
+    // allowing too many args, because the alternative is ugly
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         task: TaskRef,
         stack_pointer: usize,

@@ -21,7 +21,7 @@ fn test_kernel() -> Kernel {
         .unwrap(),
     )
     .unwrap();
-    let idle = Tcb::new(TaskRef(0), 0, 0, usize::MAX, 0, 0, 0);
+    let idle = Tcb::new(TaskRef(0), 0, 0, usize::MAX, 0, 0, 0, List::new());
     kernel.scheduler.spawn(idle).unwrap();
     kernel.scheduler.tick().unwrap();
     kernel
@@ -30,8 +30,8 @@ fn test_kernel() -> Kernel {
 #[test]
 fn test_simple_tick_schedule() {
     let mut kernel = test_kernel();
-    let a = Tcb::new(TaskRef(1), 0, 7, 5, 6, 0, 0);
-    let b = Tcb::new(TaskRef(2), 0, 7, 3, 3, 0, 0);
+    let a = Tcb::new(TaskRef(1), 0, 7, 5, 6, 0, 0, List::new());
+    let b = Tcb::new(TaskRef(2), 0, 7, 3, 3, 0, 0, List::new());
     kernel.scheduler.spawn(a).unwrap();
     kernel.scheduler.spawn(b).unwrap();
     for _ in 0..5 {
@@ -81,8 +81,8 @@ fn test_simple_tick_schedule() {
 #[test]
 fn test_send_schedule() {
     let mut kernel = test_kernel();
-    let a = Tcb::new(TaskRef(1), 0, 7, 5, 6, 0, 0);
-    let mut b = Tcb::new(TaskRef(2), 0, 7, 3, 3, 0, 0);
+    let a = Tcb::new(TaskRef(1), 0, 7, 5, 6, 0, 0, List::new());
+    let mut b = Tcb::new(TaskRef(2), 0, 7, 3, 3, 0, 0, List::new());
     b.add_cap(Cap::Endpoint(Endpoint {
         tcb_ref: ThreadRef(1),
         addr: 1,
@@ -122,8 +122,8 @@ fn test_send_schedule() {
 #[test]
 fn test_call_schedule() {
     let mut kernel = test_kernel();
-    let a = Tcb::new(TaskRef(1), 0, 7, 5, 6, 0, 0);
-    let mut b = Tcb::new(TaskRef(2), 0, 7, 3, 3, 0, 0);
+    let a = Tcb::new(TaskRef(1), 0, 7, 5, 6, 0, 0, List::new());
+    let mut b = Tcb::new(TaskRef(2), 0, 7, 3, 3, 0, 0, List::new());
     b.add_cap(Cap::Endpoint(Endpoint {
         tcb_ref: ThreadRef(1),
         addr: 1,
