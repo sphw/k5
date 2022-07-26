@@ -326,3 +326,9 @@ impl Deref for CapList {
         unsafe { core::mem::transmute(&self.buf[0..self.len]) }
     }
 }
+
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    defmt::error!("task panic: {}", defmt::Display2Format(&info)); // IDK if this is actually panic free could lead to a loop
+    panik()
+}

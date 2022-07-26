@@ -54,7 +54,6 @@ fn oom(_: core::alloc::Layout) -> ! {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    error!("kernel panic: {:?}", defmt::Debug2Format(info));
     loop {
         cortex_m::asm::bkpt();
     }
