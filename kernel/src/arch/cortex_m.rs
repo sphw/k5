@@ -333,11 +333,19 @@ fn syscall_inner(index: SyscallIndex) {
     match ret {
         CallReturn::Replace { next_thread } => switch_thread(kernel, next_thread),
         CallReturn::Switch { next_thread, ret } => {
+            // Safety: `Switch` guarentees that the current TCB has been left in place
+            // and not killed or deleted. Meaning that `CURRENT_TCB` contains a
+            // valid pointer. Also since the kernel is single threaded, we
+            // are guareneteed to be able to safely access `CURRENT_TCB`
             let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
             tcb.saved_state.set_syscall_return(ret);
             switch_thread(kernel, next_thread)
         }
         CallReturn::Return { ret } => {
+            // Safety: `Switch` guarentees that the current TCB has been left in place
+            // and not killed or deleted. Meaning that `CURRENT_TCB` contains a
+            // valid pointer. Also since the kernel is single threaded, we
+            // are guareneteed to be able to safely access `CURRENT_TCB`
             let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
             tcb.saved_state.set_syscall_return(ret);
         }

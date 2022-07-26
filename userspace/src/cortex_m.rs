@@ -1,12 +1,12 @@
+use abi::{
+    CapListEntry, CapRef, Error, RecvResp, SyscallArgs, SyscallDataType, SyscallFn, SyscallIndex,
+    SyscallReturn, SyscallReturnType,
+};
+use core::fmt::Write;
 use core::{
     arch::asm,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
-};
-
-use abi::{
-    CapListEntry, CapRef, Error, RecvResp, SyscallArgs, SyscallDataType, SyscallFn, SyscallIndex,
-    SyscallReturn, SyscallReturnType,
 };
 
 #[doc(hidden)]
@@ -301,11 +301,17 @@ pub fn caps() -> Result<CapList, Error> {
     }
 }
 
-pub fn panik() -> ! {
+pub fn panik(buf: &mut [u8]) -> ! {
     unsafe {
         syscall(
-            SyscallIndex::new().with(SyscallIndex::SYSCALL_FN, SyscallFn::Panik),
-            &mut SyscallArgs::default(),
+            SyscallIndex::new()
+                .with(SyscallIndex::SYSCALL_FN, SyscallFn::Panik)
+                .with(SyscallIndex::SYSCALL_ARG_TYPE, SyscallDataType::Copy),
+            &mut SyscallArgs {
+                arg1: buf.as_mut_ptr().addr(),
+                arg2: buf.len(),
+                ..Default::default()
+            },
         )
     };
     loop {} // will never be called sicne we paniked
@@ -327,8 +333,50 @@ impl Deref for CapList {
     }
 }
 
+#[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    defmt::error!("task panic: {}", defmt::Display2Format(&info)); // IDK if this is actually panic free could lead to a loop
-    panik()
+    let mut buf = LenWrite::default();
+    let _ = write!(&mut buf, "{}", info); // our impl is infaillible
+    panik(buf.buf())
+}
+
+struct LenWrite {
+    buf: [u8; 512],
+    pos: usize,
+}
+
+impl LenWrite {
+    fn buf(&mut self) -> &mut [u8] {
+        &mut self.buf[0..self.pos]
+    }
+}
+
+impl Default for LenWrite {
+    fn default() -> Self {
+        Self {
+            buf: [0; 512],
+            pos: 0,
+        }
+    }
+}
+
+impl Write for LenWrite {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        let bytes = s.as_bytes();
+        let start = self.pos;
+        let (end, overflow) = self.pos.overflowing_add(bytes.len());
+        if end >= 512 || overflow {
+            return Ok(());
+        }
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                bytes.as_ptr(),
+                self.buf.get_unchecked_mut(start..end).as_mut_ptr(),
+                bytes.len(),
+            );
+        }
+        self.pos = end;
+        Ok(())
+    }
 }
