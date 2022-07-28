@@ -240,8 +240,10 @@ fn build_crate(crate_path: &Path, relocate: bool, task_list: Option<&Path>) -> R
         .arg("-C")
         .arg("link-arg=-Tlink.x")
         .arg("-L")
-        .arg(format!("{}", target_dir.display()))
-        .env("DEFMT_LOG", "trace");
+        .arg(format!("{}", target_dir.display()));
+    if std::env::var("DEFMT_LOG").is_err() {
+        cmd.env("DEFMT_LOG", "debug");
+    }
     if relocate {
         cmd.arg("-C").arg("link-arg=-r");
     };
