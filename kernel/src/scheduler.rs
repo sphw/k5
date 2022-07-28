@@ -129,13 +129,22 @@ impl Scheduler {
         &mut self,
         next_thread: ThreadRef,
     ) -> Result<ThreadRef, KernelError> {
+        let current_tcb = self
+            .tcbs
+            .get_mut(*self.current_thread.tcb_ref)
+            .ok_or(KernelError::InvalidThreadRef)?;
+        current_tcb.rem_time = self.current_thread.time;
         let next_tcb = self
             .tcbs
             .get(*next_thread)
             .ok_or(KernelError::InvalidThreadRef)?;
         self.current_thread = ThreadTime {
             tcb_ref: next_thread,
-            time: next_tcb.budget,
+            time: if next_tcb.rem_time > 0 {
+                next_tcb.rem_time
+            } else {
+                next_tcb.budget
+            },
         };
         Ok(next_thread)
     }
@@ -180,7 +189,7 @@ impl ExhaustedThread {
         // Safety: We never move the underlying memory, so this is safe
         unsafe {
             let s = self.get_unchecked_mut();
-            s.time -= 1;
+            s.time = s.time.saturating_sub(1);
             s.time
         }
     }

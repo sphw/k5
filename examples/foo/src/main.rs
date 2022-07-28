@@ -9,7 +9,7 @@ use userspace::CapExt;
 pub fn main() -> ! {
     let caps = userspace::caps().unwrap();
     defmt::println!("{:?}", &*caps);
-    caps[3].cap_ref.listen().unwrap();
+    caps[0].cap_ref.listen().unwrap();
     defmt::println!("listen");
     let mut buf = [0u8; 10];
     loop {
