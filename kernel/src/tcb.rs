@@ -21,6 +21,7 @@ pub(crate) struct Tcb {
     pub(crate) stack_pointer: usize,
     pub(crate) entrypoint: usize,
     pub(crate) epoch: usize,
+    pub(crate) rem_time: usize,
 }
 
 impl Tcb {
@@ -50,6 +51,7 @@ impl Tcb {
             entrypoint,
             saved_state: Default::default(),
             epoch,
+            rem_time: budget,
         }
     }
 

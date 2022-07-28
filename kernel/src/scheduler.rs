@@ -10,6 +10,7 @@ use alloc::boxed::Box;
 use cordyceps::{list::Links, List};
 use core::mem::MaybeUninit;
 use core::pin::Pin;
+use defmt::Format;
 
 pub(crate) struct Scheduler {
     pub(crate) tcbs: Space<Tcb, TCB_CAPACITY>,
@@ -37,6 +38,7 @@ impl Scheduler {
         mask: usize,
         out_buf: TaskPtrMut<'static, [u8]>,
         recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
+        loan: bool,
     ) -> Result<ThreadRef, KernelError> {
         let src = self.current_thread_mut()?;
         src.state = ThreadState::Waiting {
@@ -45,7 +47,8 @@ impl Scheduler {
             recv_resp,
         };
 
-        self.wait_current_thread()
+        let next_thread = self.next_thread(0).unwrap_or_else(ThreadRef::idle);
+        self.switch_thread(next_thread, loan)
     }
 
     pub fn next_thread(&mut self, current_priority: usize) -> Option<ThreadRef> {
@@ -85,7 +88,9 @@ impl Scheduler {
                 cursor.current_mut()
             } {
                 if let Some(tcb_ref) = t.tcb_ref {
-                    if t.decrement() == 0 {
+                    let time = t.decrement();
+                    defmt::trace!("decrement exhausted thread: {:?} {:?}", tcb_ref, time);
+                    if time == 0 {
                         remove_flag = true;
                         let tcb = self
                             .tcbs
@@ -101,6 +106,7 @@ impl Scheduler {
             }
         }
         self.current_thread.time -= 1;
+        defmt::trace!("current thread time: {:?}", self.current_thread.time);
         // check if current thread's budget has been surpassed
         if self.current_thread.time == 0 {
             let current_tcb = self
@@ -114,13 +120,14 @@ impl Scheduler {
             };
             self.exhausted_threads
                 .push_front(Box::pin(exhausted_thread));
+            defmt::trace!("exhausting: {:?}", self.current_thread);
             let next_thread = self.next_thread(0).unwrap_or_else(ThreadRef::idle);
-            return self.switch_thread(next_thread).map(Some);
+            return self.switch_thread(next_thread, false).map(Some);
         }
         let current_tcb = self.current_thread()?;
         let current_priority = current_tcb.priority;
         if let Some(next_thread) = self.next_thread(current_priority) {
-            return self.switch_thread(next_thread).map(Some);
+            return self.switch_thread(next_thread, false).map(Some);
         }
         Ok(None)
     }
@@ -128,21 +135,44 @@ impl Scheduler {
     pub(crate) fn switch_thread(
         &mut self,
         next_thread: ThreadRef,
+        loan: bool,
     ) -> Result<ThreadRef, KernelError> {
-        let next_tcb = self
-            .tcbs
-            .get(*next_thread)
-            .ok_or(KernelError::InvalidThreadRef)?;
+        let loaned_tcb = if let Some(loaned) = self.current_thread.loaned_tcb {
+            self.tcbs
+                .get_mut(*loaned)
+                .ok_or(KernelError::InvalidThreadRef)?
+        } else {
+            self.tcbs
+                .get_mut(*self.current_thread.tcb_ref)
+                .ok_or(KernelError::InvalidThreadRef)?
+        };
+        loaned_tcb.rem_time = self.current_thread.time;
+        // NOTE: we might want to just monomorphize this out, rather than
+        // using an if statement
+        let time_tcb = if loan {
+            self.tcbs
+                .get(*self.current_thread.tcb_ref)
+                .ok_or(KernelError::InvalidThreadRef)?
+        } else {
+            self.tcbs
+                .get(*next_thread)
+                .ok_or(KernelError::InvalidThreadRef)?
+        };
+        defmt::trace!(
+            "switching: {:?} -> {:?}",
+            self.current_thread.tcb_ref,
+            next_thread
+        );
         self.current_thread = ThreadTime {
             tcb_ref: next_thread,
-            time: next_tcb.budget,
+            time: if time_tcb.rem_time > 0 {
+                time_tcb.rem_time
+            } else {
+                time_tcb.budget
+            },
+            loaned_tcb: loan.then_some(self.current_thread.tcb_ref),
         };
         Ok(next_thread)
-    }
-
-    fn wait_current_thread(&mut self) -> Result<ThreadRef, KernelError> {
-        let next_thread = self.next_thread(0).unwrap_or_else(ThreadRef::idle);
-        self.switch_thread(next_thread)
     }
 
     #[inline]
@@ -180,7 +210,7 @@ impl ExhaustedThread {
         // Safety: We never move the underlying memory, so this is safe
         unsafe {
             let s = self.get_unchecked_mut();
-            s.time -= 1;
+            s.time = s.time.saturating_sub(1);
             s.time
         }
     }
@@ -188,8 +218,9 @@ impl ExhaustedThread {
 
 linked_impl! { ExhaustedThread }
 
-#[derive(Debug)]
+#[derive(Debug, Format)]
 pub(crate) struct ThreadTime {
     pub(crate) tcb_ref: ThreadRef,
     pub(crate) time: usize,
+    pub(crate) loaned_tcb: Option<ThreadRef>,
 }
