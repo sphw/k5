@@ -100,9 +100,12 @@ fn test_send_schedule() {
     assert_eq!(*next, 1, "should switch to a");
     let next = kernel
         .scheduler
-        .wait(0x1, unsafe { TaskPtrMut::from_raw_parts(1, 10) }, unsafe {
-            TaskPtrMut::from_raw_parts(1, ())
-        })
+        .wait(
+            0x1,
+            unsafe { TaskPtrMut::from_raw_parts(1, 10) },
+            unsafe { TaskPtrMut::from_raw_parts(1, ()) },
+            false,
+        )
         .unwrap();
     assert_eq!(*next, 2, "should switch to b");
     let msg = [1u8, 2, 3];
@@ -145,9 +148,12 @@ fn test_call_schedule() {
     assert_eq!(*next, 1, "should switch to a");
     let next = kernel
         .scheduler
-        .wait(0x1, unsafe { TaskPtrMut::from_raw_parts(0, 0) }, unsafe {
-            TaskPtrMut::from_raw_parts(0, ())
-        })
+        .wait(
+            0x1,
+            unsafe { TaskPtrMut::from_raw_parts(0, 0) },
+            unsafe { TaskPtrMut::from_raw_parts(0, ()) },
+            false,
+        )
         .unwrap();
     assert_eq!(*next, 2, "should switch to b");
     let msg = Box::new([1u8, 2, 3]);

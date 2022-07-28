@@ -101,7 +101,7 @@ unsafe impl SysCall for CallSysCall {
             unsafe { TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(self.resp_addr, ()) };
         let next_thread = kern.call(self.cap_ref, msg, out_buf, recv_resp)?;
         Ok(CallReturn::Switch {
-            next_thread: kern.scheduler.switch_thread(next_thread)?,
+            next_thread,
             ret: abi::SyscallReturn::new(),
         })
     }
@@ -149,7 +149,7 @@ unsafe impl SysCall for RecvCall {
                 TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(self.resp_addr, ())
             };
             Ok(CallReturn::Replace {
-                next_thread: kern.scheduler.wait(self.mask, out_buf, recv_resp)?,
+                next_thread: kern.scheduler.wait(self.mask, out_buf, recv_resp, false)?,
             })
         } else {
             Ok(CallReturn::Return {
@@ -292,7 +292,7 @@ unsafe impl SysCall for PanikCall {
             .scheduler
             .next_thread(0)
             .unwrap_or_else(ThreadRef::idle);
-        let next_thread = kern.scheduler.switch_thread(next_thread)?;
+        let next_thread = kern.scheduler.switch_thread(next_thread, false)?;
         Ok(CallReturn::Replace { next_thread })
     }
 }

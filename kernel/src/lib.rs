@@ -85,6 +85,7 @@ impl Kernel {
         let current_thread = ThreadTime {
             tcb_ref: ThreadRef(0),
             time: 20,
+            loaned_tcb: None,
         };
         const DOMAIN_ENTRY: MaybeUninit<List<DomainEntry>> = MaybeUninit::uninit();
         let mut domains: [MaybeUninit<List<DomainEntry>>; PRIORITY_COUNT] =
@@ -217,7 +218,7 @@ impl Kernel {
         };
         self.send_inner(endpoint, msg, Some(reply_endpoint))?;
         self.scheduler
-            .wait(endpoint.addr | 0x80000000, out_buf, recv_resp) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
+            .wait(endpoint.addr | 0x80000000, out_buf, recv_resp, true) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
     }
 
     pub(crate) fn start(&mut self) -> ! {
