@@ -1,6 +1,4 @@
-use core::mem::MaybeUninit;
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Space<T, const N: usize> {
     items: [Option<T>; N],
     free_list: [usize; N],
@@ -9,18 +7,12 @@ pub struct Space<T, const N: usize> {
 
 impl<T, const N: usize> Default for Space<T, N> {
     fn default() -> Self {
-        let mut items: [MaybeUninit<Option<T>>; N] = MaybeUninit::uninit_array();
-        for item in &mut items {
-            item.write(None);
-        }
-        // Safety: we just inited all of the above items, so this is safe
-        let items = unsafe { MaybeUninit::array_assume_init(items) };
         let mut free_list = [0; N];
         for (i, x) in free_list.iter_mut().enumerate() {
             *x = N - (i + 1);
         }
         Self {
-            items,
+            items: [Self::ITEM; N],
             free_list,
             len: 0,
         }
@@ -28,6 +20,7 @@ impl<T, const N: usize> Default for Space<T, N> {
 }
 
 impl<T, const N: usize> Space<T, N> {
+    const ITEM: Option<T> = None;
     pub fn push(&mut self, item: T) -> Option<usize> {
         if self.len >= N {
             return None;
@@ -61,6 +54,11 @@ impl<T, const N: usize> Space<T, N> {
     #[allow(dead_code)]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.items.iter_mut().filter_map(|i| i.as_mut())
+    }
+
+    #[allow(dead_code)]
+    pub fn into_iter(self) -> impl Iterator<Item = T> {
+        self.items.into_iter().filter_map(|i| i)
     }
 
     #[allow(dead_code)]
