@@ -16,7 +16,7 @@ This page will give an overview of each component, more details can be found in 
 
 ## Scheduler
 
-K5's scheduler is heavily based on the MCS system from seL4, which is intern based on ["Aperiodic task scheduling for real-time systems"](https://trustworthy.systems/publications/csiro_full_text/Lyons_MAH_18.pdf) by Brinkely Sprunt. There are some minor, but important, differences between MCS and k5 system. Both schedulers attempt to solve the problem of a high-priority task monopolizing CPU-time, and they solve this problem in fundemntally the same way.
+K5's scheduler is heavily based on the MCS system from seL4, which is intern based on ["Scheduling-Context Capabilities"](https://trustworthy.systems/publications/csiro_full_text/Lyons_MAH_18.pdf) by Anna Lyons, et all. There are some minor, but important, differences between MCS and k5 system. Both schedulers attempt to solve the problem of a high-priority task monopolizing CPU-time, and they solve this problem in fundemntally the same way.
 
 In K5 each task is given a priority, a budget, and a cooldown. Threads are scheduled in a round-robin fashion in decending order of priority (7 is the highest, while 0 is the lowest). When a thread is first scheduled on the CPU, it is given an amount of time it is allowed to execute, its budget. Each tick this budget is reduced, when it reaches zero the thread is "exhausted" and execution is paused. It is then added to queue of exhausted threads. Each tick the exhausted list is scanned for threads whose cooldown has elapsed, once a cooldown is elapsed the thread is rescheduled. This technique is almost identical to MCS with some terminology differences. MCS has a "period" which is equivalent to k5's `budget + cooldown`. 
 
