@@ -15,7 +15,7 @@ mycelium_bitfield::bitfield! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, defmt::Format, PartialEq)]
 #[repr(u8)]
 pub enum SyscallFn {
     Send = 0x0,
@@ -98,7 +98,7 @@ pub enum SyscallReturnType {
 }
 
 mycelium_bitfield::bitfield! {
-    #[derive( Eq, PartialEq)]
+    #[derive( Eq, PartialEq, Format)]
     pub struct SyscallReturn<u64> {
         pub const SYSCALL_TYPE: SyscallReturnType;
         pub const SYSCALL_LEN = 22;

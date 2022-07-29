@@ -10,7 +10,7 @@ use crate::{
     task::TaskState,
     task_ptr::{TaskPtr, TaskPtrMut},
     tcb::Tcb,
-    CapEntry, Kernel, KernelError,
+    CapEntry, DomainEntry, Kernel, KernelError,
 };
 
 #[repr(C)]
@@ -55,7 +55,7 @@ unsafe impl SysCall for SendCall {
         let next_thread = kern.scheduler.next_thread(priority);
         Ok(match next_thread {
             Some(next_thread) => CallReturn::Switch {
-                next_thread,
+                next_thread: next_thread.tcb_ref,
                 ret: abi::SyscallReturn::new()
                     .with(abi::SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
             },
@@ -152,8 +152,10 @@ unsafe impl SysCall for RecvCall {
                 next_thread: kern.scheduler.wait(self.mask, out_buf, recv_resp, false)?,
             })
         } else {
+            defmt::println!("got msg in recv");
             Ok(CallReturn::Return {
-                ret: abi::SyscallReturn::new(),
+                ret: abi::SyscallReturn::new()
+                    .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
             })
         }
     }
@@ -245,11 +247,7 @@ unsafe impl SysCall for PanikCall {
             let mut cursor = domain.cursor_front_mut();
             cursor.move_prev();
             while let Some(entry) = { cursor.next() } {
-                if entry
-                    .tcb_ref
-                    .and_then(|t| kern.scheduler.tcbs.get(*t))
-                    .is_some()
-                {
+                if kern.scheduler.tcbs.get(*entry.tcb_ref).is_some() {
                     cursor.remove_current();
                 }
             }
@@ -291,8 +289,8 @@ unsafe impl SysCall for PanikCall {
         let next_thread = kern
             .scheduler
             .next_thread(0)
-            .unwrap_or_else(ThreadRef::idle);
-        let next_thread = kern.scheduler.switch_thread(next_thread, false)?;
+            .unwrap_or_else(DomainEntry::idle);
+        let next_thread = kern.scheduler.switch_thread(next_thread)?;
         Ok(CallReturn::Replace { next_thread })
     }
 }

@@ -167,6 +167,7 @@ impl Kernel {
         reply_endpoint: Option<Endpoint>,
     ) -> Result<(), KernelError> {
         let dest_tcb = self.scheduler.get_tcb_mut(endpoint.tcb_ref)?;
+        let is_call = reply_endpoint.is_some();
         dest_tcb.req_queue.push_back(Box::pin(IPCMsg {
             inner: Some(IPCMsgInner {
                 reply_endpoint,
@@ -196,6 +197,14 @@ impl Kernel {
                 self.scheduler
                     .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
             }
+        } else if is_call {
+            let task = self
+                .tasks
+                .get(dest_tcb.task.0)
+                .ok_or(KernelError::InvalidTaskRef)?;
+            let dest_tcb_priority = dest_tcb.priority;
+            self.scheduler
+                .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
         }
         Ok(())
     }
@@ -237,7 +246,11 @@ impl Kernel {
         index: abi::SyscallIndex,
         args: &SyscallArgs,
     ) -> Result<CallReturn, KernelError> {
-        match index.get(abi::SyscallIndex::SYSCALL_FN) {
+        let f = index.get(abi::SyscallIndex::SYSCALL_FN);
+        if f != abi::SyscallFn::Log {
+            defmt::trace!("syscall index: {:?}", f);
+        }
+        match f {
             abi::SyscallFn::Send => {
                 SendCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
             }
@@ -283,17 +296,27 @@ pub enum KernelError {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TaskRef(pub usize);
 
-#[derive(Default)]
 pub(crate) struct DomainEntry {
     _links: list::Links<DomainEntry>,
-    tcb_ref: Option<ThreadRef>,
+    tcb_ref: ThreadRef,
+    loaned_tcb: Option<ThreadRef>,
 }
 
 impl DomainEntry {
-    pub fn new(tcb_ref: ThreadRef) -> Self {
+    pub fn new(tcb_ref: ThreadRef, loaned_tcb: Option<ThreadRef>) -> Self {
         Self {
-            tcb_ref: Some(tcb_ref),
+            tcb_ref,
             _links: Default::default(),
+            loaned_tcb,
+        }
+    }
+
+    #[inline]
+    pub fn idle() -> Self {
+        Self {
+            tcb_ref: ThreadRef::idle(),
+            _links: Default::default(),
+            loaned_tcb: None,
         }
     }
 }
