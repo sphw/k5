@@ -45,7 +45,8 @@ impl RegionTable {
             }
             if inserted_at.is_none()
                 && region.range.start > self.regions[i].range.end
-                && region.range.end < self.regions[i + 1].range.start
+                && ((i == self.regions.len() - 1)
+                    || region.range.end < self.regions[i + 1].range.start)
             {
                 inserted_at = Some(i);
             }

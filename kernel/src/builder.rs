@@ -1,8 +1,14 @@
+use core::mem;
+
 use abi::{Cap, Endpoint, Listen, PortId, ThreadRef};
 use alloc::boxed::Box;
 use cordyceps::List;
 
-use crate::{CapEntry, Kernel, TaskDesc, TaskRef};
+use crate::{
+    regions::{Region, RegionAttr},
+    task::Loan,
+    CapEntry, Kernel, KernelError, TaskDesc, TaskRef,
+};
 
 /// Builder for creating and booting the k5 kernel
 ///
@@ -41,8 +47,14 @@ impl KernelBuilder<'_> {
     /// Spawns a new thread, and retunrs the thread buf
     pub fn thread(&mut self, thread: ThreadBuilder) -> ThreadRef {
         let task_ref = TaskRef(thread.index);
-        let task = self.kernel.task(task_ref).expect("invalid thread index");
+        let task = self
+            .kernel
+            .task_mut(task_ref)
+            .expect("invalid thread index");
         let entrypoint = task.entrypoint;
+        for loan in thread.loans.into_iter() {
+            task.push_loan(loan.build()).expect("loan add failed");
+        }
         self.kernel
             .spawn_thread(
                 task_ref,
@@ -101,6 +113,7 @@ pub struct ThreadBuilder {
     budget: usize,
     cooldown: usize,
     caps: List<CapEntry>,
+    loans: heapless::Vec<RegionBuilder, 16>,
 }
 
 impl ThreadBuilder {
@@ -116,6 +129,7 @@ impl ThreadBuilder {
             budget: usize::MAX,
             cooldown: 0,
             caps: List::new(),
+            loans: heapless::Vec::new(),
         }
     }
 
@@ -160,6 +174,50 @@ impl ThreadBuilder {
             _links: Default::default(),
         }));
         self
+    }
+
+    pub fn loan_mem(mut self, region: RegionBuilder) -> Self {
+        self.loans
+            .push(region)
+            .map_err(|_| KernelError::ABI(abi::Error::BufferOverflow))
+            .unwrap();
+        self
+    }
+}
+
+pub struct RegionBuilder(Region);
+
+impl RegionBuilder {
+    pub fn device<T>(ptr: *const T) -> Self {
+        let len = mem::size_of::<T>();
+        RegionBuilder(Region {
+            range: ptr.addr()..ptr.addr() + len,
+            attr: RegionAttr::Device.into(),
+        })
+    }
+
+    pub fn write(mut self) -> Self {
+        self.0.attr |= RegionAttr::Write;
+        self
+    }
+
+    pub fn read(mut self) -> Self {
+        self.0.attr |= RegionAttr::Read;
+        self
+    }
+
+    pub fn exec(mut self) -> Self {
+        self.0.attr |= RegionAttr::Exec;
+        self
+    }
+
+    pub fn dma(mut self) -> Self {
+        self.0.attr |= RegionAttr::Dma;
+        self
+    }
+
+    fn build(self) -> Loan {
+        Loan { region: self.0 }
     }
 }
 

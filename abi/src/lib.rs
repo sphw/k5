@@ -148,6 +148,7 @@ pub enum Error {
     BufferOverflow,
     PortNotOpen,
     InvalidCap,
+    InvalidLoan,
     Unknown(u8),
 }
 
@@ -159,6 +160,7 @@ impl From<u8> for Error {
             3 => Error::BufferOverflow,
             4 => Error::PortNotOpen,
             5 => Error::InvalidCap,
+            6 => Error::InvalidLoan,
             code => Error::Unknown(code),
         }
     }
@@ -172,6 +174,7 @@ impl From<Error> for u8 {
             Error::BufferOverflow => 3,
             Error::PortNotOpen => 4,
             Error::InvalidCap => 5,
+            Error::InvalidLoan => 6,
             Error::Unknown(code) => code,
         }
     }
