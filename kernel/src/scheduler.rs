@@ -7,6 +7,7 @@ use crate::tcb::Tcb;
 use crate::{DomainEntry, ThreadState, PRIORITY_COUNT, TCB_CAPACITY};
 use abi::{RecvResp, ThreadRef};
 use alloc::boxed::Box;
+use alloc::collections::BinaryHeap;
 use cordyceps::{list::Links, List};
 use core::mem::MaybeUninit;
 use core::pin::Pin;
@@ -14,23 +15,20 @@ use defmt::Format;
 
 pub(crate) struct Scheduler {
     pub(crate) tcbs: Space<Tcb, TCB_CAPACITY>,
-    pub(crate) domains: [List<DomainEntry>; PRIORITY_COUNT],
+    pub(crate) wait_queue: BinaryHeap<DomainEntry>,
     pub(crate) exhausted_threads: List<ExhaustedThread>,
     pub(crate) current_thread: ThreadTime,
 }
 
 impl Scheduler {
     pub fn spawn(&mut self, tcb: Tcb) -> Result<ThreadRef, KernelError> {
-        let d = self
-            .domains
-            .get_mut(tcb.priority)
-            .ok_or(KernelError::InvalidPriority)?;
+        let priority = tcb.priority as u8;
         let tcb_ref = ThreadRef(self.tcbs.push(tcb).ok_or(KernelError::TooManyThreads)?);
-        d.push_back(Box::pin(DomainEntry {
+        self.wait_queue.push(DomainEntry {
             tcb_ref,
-            _links: Default::default(),
             loaned_tcb: None,
-        }));
+            priority,
+        });
         Ok(tcb_ref)
     }
 
@@ -56,29 +54,22 @@ impl Scheduler {
     }
 
     pub fn next_thread(&mut self, current_priority: usize) -> Option<DomainEntry> {
-        for domain in self
-            .domains
-            .iter_mut()
-            .rev()
-            .take(PRIORITY_COUNT - 1 - current_priority)
+        if self
+            .wait_queue
+            .peek()
+            .map(|i| {
+                i.priority > current_priority as u8 && i.tcb_ref != self.current_thread.tcb_ref
+            })
+            .unwrap_or_default()
         {
-            if let Some(thread) = domain.pop_front() {
-                return Some(DomainEntry {
-                    _links: Default::default(),
-                    tcb_ref: thread.tcb_ref,
-                    loaned_tcb: thread.loaned_tcb,
-                });
-            }
+            return self.wait_queue.pop();
         }
         None
     }
 
     pub fn add_thread(&mut self, priority: usize, tcb_ref: ThreadRef) -> Result<(), KernelError> {
-        let d = self
-            .domains
-            .get_mut(priority)
-            .ok_or(KernelError::InvalidPriority)?;
-        d.push_back(Box::pin(DomainEntry::new(tcb_ref, None)));
+        self.wait_queue
+            .push(DomainEntry::new(tcb_ref, None, priority as u8));
         Ok(())
     }
 
@@ -106,11 +97,11 @@ impl Scheduler {
                             .tcbs
                             .get(*tcb_ref)
                             .ok_or(KernelError::InvalidThreadRef)?;
-                        let d = self
-                            .domains
-                            .get_mut(tcb.priority)
-                            .ok_or(KernelError::InvalidPriority)?;
-                        d.push_back(Box::pin(DomainEntry::new(tcb_ref, loaned_tcb)));
+                        self.wait_queue.push(DomainEntry::new(
+                            tcb_ref,
+                            loaned_tcb,
+                            tcb.priority as u8,
+                        ));
                     }
                 }
             }

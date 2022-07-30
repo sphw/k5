@@ -243,15 +243,22 @@ unsafe impl SysCall for PanikCall {
         } else {
             error!("task {:?} paniked with invalid msg", task_ref.0);
         }
-        for domain in &mut kern.scheduler.domains {
-            let mut cursor = domain.cursor_front_mut();
-            cursor.move_prev();
-            while let Some(entry) = { cursor.next() } {
-                if kern.scheduler.tcbs.get(*entry.tcb_ref).is_some() {
-                    cursor.remove_current();
-                }
+        kern.scheduler.wait_queue.retain(|e| {
+            if let Some(tcb) = kern.scheduler.tcbs.get(*e.tcb_ref) {
+                tcb.task != task_ref
+            } else {
+                false
             }
-        }
+        });
+        // for domain in &mut kern.scheduler.domains {
+        //     let mut cursor = domain.cursor_front_mut();
+        //     cursor.move_prev();
+        //     while let Some(entry) = { cursor.next() } {
+        //         if kern.scheduler.tcbs.get(*entry.tcb_ref).is_some() {
+        //             cursor.remove_current();
+        //         }
+        //     }
+        // }
         let task = kern
             .tasks
             .get_mut(task_ref.0)

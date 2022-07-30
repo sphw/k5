@@ -198,7 +198,7 @@ impl From<usize> for CapRef {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, defmt::Format)]
+#[derive(Clone, Copy, Debug, PartialEq, defmt::Format, Eq)]
 #[repr(C)]
 pub struct ThreadRef(pub usize);
 

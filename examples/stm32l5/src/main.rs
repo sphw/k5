@@ -28,6 +28,7 @@ fn main() -> ! {
 
     let mut kernel = kernel::KernelBuilder::new(task_table::TASKS);
     let _idle = kernel.idle_thread(task_table::IDLE);
+
     let bar_thread = kernel.thread(
         task_table::BAR
             .priority(7)
@@ -35,7 +36,6 @@ fn main() -> ! {
             .cooldown(50)
             .connect(*b"0123456789abcdef"),
     );
-
     let foo_thread = kernel.thread(
         task_table::FOO
             .priority(7)
@@ -49,6 +49,7 @@ fn main() -> ! {
             .loan_mem(RegionBuilder::device(stm32l562::FLASH::PTR).write().read())
             .listen(*b"0123456789abcdef"),
     );
+
     kernel.endpoint(bar_thread, foo_thread, 0);
     info!("booting");
     kernel.start()

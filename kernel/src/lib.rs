@@ -8,6 +8,7 @@
 #![feature(naked_functions)]
 #![feature(maybe_uninit_uninit_array)]
 #![feature(maybe_uninit_array_assume_init)]
+#![feature(binary_heap_retain)]
 
 extern crate alloc;
 
@@ -35,7 +36,7 @@ pub use builder::*;
 mod tests;
 
 use abi::{Cap, CapRef, Endpoint, RecvResp, SyscallArgs, SyscallIndex, ThreadRef};
-use alloc::boxed::Box;
+use alloc::{boxed::Box, collections::BinaryHeap};
 use cordyceps::{
     list::{self, Links},
     List,
@@ -87,20 +88,12 @@ impl Kernel {
             time: 20,
             loaned_tcb: None,
         };
-        const DOMAIN_ENTRY: MaybeUninit<List<DomainEntry>> = MaybeUninit::uninit();
-        let mut domains: [MaybeUninit<List<DomainEntry>>; PRIORITY_COUNT] =
-            [DOMAIN_ENTRY; PRIORITY_COUNT];
-        for d in &mut domains {
-            d.write(List::new());
-        }
-        // Safety: We just initialized every item in the array, so this transmute is safe
-        let domains: [List<DomainEntry>; PRIORITY_COUNT] = unsafe { mem::transmute(domains) };
         Ok(Kernel {
             scheduler: Scheduler {
                 tcbs: Space::default(),
                 current_thread,
                 exhausted_threads: List::new(),
-                domains,
+                wait_queue: BinaryHeap::default(),
             },
             registry: Registry::default(),
             epoch: 0,
@@ -296,18 +289,31 @@ pub enum KernelError {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TaskRef(pub usize);
 
+#[derive(Eq, PartialEq, Debug)]
 pub(crate) struct DomainEntry {
-    _links: list::Links<DomainEntry>,
     tcb_ref: ThreadRef,
     loaned_tcb: Option<ThreadRef>,
+    priority: u8,
+}
+
+impl PartialOrd for DomainEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        self.priority.partial_cmp(&other.priority)
+    }
+}
+
+impl Ord for DomainEntry {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.priority.cmp(&other.priority)
+    }
 }
 
 impl DomainEntry {
-    pub fn new(tcb_ref: ThreadRef, loaned_tcb: Option<ThreadRef>) -> Self {
+    pub fn new(tcb_ref: ThreadRef, loaned_tcb: Option<ThreadRef>, priority: u8) -> Self {
         Self {
             tcb_ref,
-            _links: Default::default(),
             loaned_tcb,
+            priority,
         }
     }
 
@@ -315,8 +321,8 @@ impl DomainEntry {
     pub fn idle() -> Self {
         Self {
             tcb_ref: ThreadRef::idle(),
-            _links: Default::default(),
             loaned_tcb: None,
+            priority: 0,
         }
     }
 }
