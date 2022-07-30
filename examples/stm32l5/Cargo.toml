@@ -13,6 +13,8 @@ cortex-m-rt = "0.7"
 kernel = { path = "../../kernel" }
 abi = { path = "../../abi" }
 defmt = { version = "0.3", features = ["encoding-raw"] }
+stm32l5 = { version = "0.15", features = ["stm32l562"], default-features = false }
+
 
 [build-dependencies]
 codegen = { path =  "../../codegen" }

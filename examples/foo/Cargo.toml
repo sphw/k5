@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 defmt = "0.3"
 userspace = { path = "../../userspace" }
+stm32-hal2 = { version = "^1.5.0", features = ["l562"]}
