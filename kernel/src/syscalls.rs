@@ -4,7 +4,7 @@ use abi::{
     Cap, CapListEntry, CapRef, RecvResp, SyscallArgs, SyscallDataType, SyscallReturn,
     SyscallReturnType, ThreadRef,
 };
-use defmt::error;
+use defmt::{error, Format};
 
 use crate::{
     task::TaskState,
@@ -152,7 +152,6 @@ unsafe impl SysCall for RecvCall {
                 next_thread: kern.scheduler.wait(self.mask, out_buf, recv_resp, false)?,
             })
         } else {
-            defmt::println!("got msg in recv");
             Ok(CallReturn::Return {
                 ret: abi::SyscallReturn::new()
                     .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
@@ -392,6 +391,7 @@ fn get_buf<'t, const N: usize>(
     Ok(slice)
 }
 
+#[derive(Format)]
 pub enum CallReturn {
     Replace {
         next_thread: ThreadRef,

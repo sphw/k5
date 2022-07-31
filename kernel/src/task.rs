@@ -100,6 +100,7 @@ impl Task {
         Ok(LoanRef(i))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn pop_loan(&mut self, loan_ref: LoanRef) -> Result<(), KernelError> {
         let loan = self
             .loans

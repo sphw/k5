@@ -24,6 +24,7 @@ mod task;
 mod task_ptr;
 mod tcb;
 
+use defmt::Format;
 use registry::Registry;
 use syscalls::{
     CallReturn, CallSysCall, CapsCall, ConnectCall, ListenCall, LogCall, PanikCall, RecvCall,
@@ -41,11 +42,7 @@ use cordyceps::{
     list::{self, Links},
     List,
 };
-use core::{
-    mem::{self, MaybeUninit},
-    ops::Range,
-    pin::Pin,
-};
+use core::{mem::MaybeUninit, ops::Range, pin::Pin};
 use heapless::Vec;
 use regions::{Region, RegionAttr, RegionTable};
 use scheduler::{Scheduler, ThreadTime};
@@ -53,7 +50,6 @@ use space::Space;
 use task::*;
 use task_ptr::{TaskPtr, TaskPtrMut};
 
-pub(crate) const PRIORITY_COUNT: usize = 8;
 pub(crate) const TCB_CAPACITY: usize = 16;
 
 pub struct Kernel {
@@ -191,10 +187,6 @@ impl Kernel {
                     .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
             }
         } else if is_call {
-            let task = self
-                .tasks
-                .get(dest_tcb.task.0)
-                .ok_or(KernelError::InvalidTaskRef)?;
             let dest_tcb_priority = dest_tcb.priority;
             self.scheduler
                 .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
@@ -289,7 +281,7 @@ pub enum KernelError {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TaskRef(pub usize);
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug, Format)]
 pub(crate) struct DomainEntry {
     tcb_ref: ThreadRef,
     loaned_tcb: Option<ThreadRef>,

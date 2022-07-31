@@ -58,7 +58,7 @@ impl<T, const N: usize> Space<T, N> {
 
     #[allow(dead_code)]
     pub fn into_iter(self) -> impl Iterator<Item = T> {
-        self.items.into_iter().filter_map(|i| i)
+        self.items.into_iter().flatten()
     }
 
     #[allow(dead_code)]

@@ -4,7 +4,7 @@ use crate::linked_impl;
 use crate::space::Space;
 use crate::task_ptr::TaskPtrMut;
 use crate::tcb::Tcb;
-use crate::{DomainEntry, ThreadState, PRIORITY_COUNT, TCB_CAPACITY};
+use crate::{DomainEntry, ThreadState, TCB_CAPACITY};
 use abi::{RecvResp, ThreadRef};
 use alloc::boxed::Box;
 use alloc::collections::BinaryHeap;
@@ -54,17 +54,29 @@ impl Scheduler {
     }
 
     pub fn next_thread(&mut self, current_priority: usize) -> Option<DomainEntry> {
-        if self
-            .wait_queue
-            .peek()
-            .map(|i| {
-                i.priority > current_priority as u8 && i.tcb_ref != self.current_thread.tcb_ref
-            })
-            .unwrap_or_default()
-        {
-            return self.wait_queue.pop();
+        loop {
+            if self
+                .wait_queue
+                .peek()
+                .map(|i| i.priority > current_priority as u8)
+                .unwrap_or_default()
+            {
+                let thread = self.wait_queue.pop().unwrap();
+                if thread.tcb_ref == self.current_thread.tcb_ref {
+                    continue;
+                    // when next thread is called we typically want the next possible thread,
+                    // available, not ourselves. Plus we are already executing.
+                }
+                let tcb = self.tcbs.get(*thread.tcb_ref).unwrap();
+                if let ThreadState::Waiting { .. } = tcb.state {
+                    // bad things can happen if we switch to waiting
+                    continue;
+                }
+                return Some(thread);
+            } else {
+                return None;
+            }
         }
-        None
     }
 
     pub fn add_thread(&mut self, priority: usize, tcb_ref: ThreadRef) -> Result<(), KernelError> {
@@ -74,7 +86,6 @@ impl Scheduler {
     }
 
     pub fn tick(&mut self) -> Result<Option<ThreadRef>, KernelError> {
-        defmt::trace!("tick");
         // requeue exhausted threads
         {
             let mut cursor = self.exhausted_threads.cursor_front_mut();
@@ -97,17 +108,14 @@ impl Scheduler {
                             .tcbs
                             .get(*tcb_ref)
                             .ok_or(KernelError::InvalidThreadRef)?;
-                        self.wait_queue.push(DomainEntry::new(
-                            tcb_ref,
-                            loaned_tcb,
-                            tcb.priority as u8,
-                        ));
+                        let domain_entry =
+                            DomainEntry::new(tcb_ref, loaned_tcb, tcb.priority as u8);
+                        self.wait_queue.push(domain_entry);
                     }
                 }
             }
         }
         self.current_thread.time -= 1;
-        defmt::trace!("current thread time: {:?}", self.current_thread.time);
         // check if current thread's budget has been surpassed
         if self.current_thread.time == 0 {
             let current_tcb = self
@@ -210,10 +218,6 @@ impl ExhaustedThread {
             s.time = s.time.saturating_sub(1);
             s.time
         }
-    }
-
-    fn loaned_tcb(self: &Pin<&mut ExhaustedThread>) -> Option<ThreadRef> {
-        self.loaned_tcb
     }
 }
 
