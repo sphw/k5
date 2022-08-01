@@ -4,13 +4,13 @@ use abi::{
     Cap, CapListEntry, CapRef, RecvResp, SyscallArgs, SyscallDataType, SyscallReturn,
     SyscallReturnType, ThreadRef,
 };
-use defmt::error;
+use defmt::{error, Format};
 
 use crate::{
     task::TaskState,
     task_ptr::{TaskPtr, TaskPtrMut},
     tcb::Tcb,
-    CapEntry, Kernel, KernelError,
+    CapEntry, DomainEntry, Kernel, KernelError,
 };
 
 #[repr(C)]
@@ -55,7 +55,7 @@ unsafe impl SysCall for SendCall {
         let next_thread = kern.scheduler.next_thread(priority);
         Ok(match next_thread {
             Some(next_thread) => CallReturn::Switch {
-                next_thread,
+                next_thread: next_thread.tcb_ref,
                 ret: abi::SyscallReturn::new()
                     .with(abi::SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
             },
@@ -153,7 +153,8 @@ unsafe impl SysCall for RecvCall {
             })
         } else {
             Ok(CallReturn::Return {
-                ret: abi::SyscallReturn::new(),
+                ret: abi::SyscallReturn::new()
+                    .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
             })
         }
     }
@@ -241,19 +242,22 @@ unsafe impl SysCall for PanikCall {
         } else {
             error!("task {:?} paniked with invalid msg", task_ref.0);
         }
-        for domain in &mut kern.scheduler.domains {
-            let mut cursor = domain.cursor_front_mut();
-            cursor.move_prev();
-            while let Some(entry) = { cursor.next() } {
-                if entry
-                    .tcb_ref
-                    .and_then(|t| kern.scheduler.tcbs.get(*t))
-                    .is_some()
-                {
-                    cursor.remove_current();
-                }
+        kern.scheduler.wait_queue.retain(|e| {
+            if let Some(tcb) = kern.scheduler.tcbs.get(*e.tcb_ref) {
+                tcb.task != task_ref
+            } else {
+                false
             }
-        }
+        });
+        // for domain in &mut kern.scheduler.domains {
+        //     let mut cursor = domain.cursor_front_mut();
+        //     cursor.move_prev();
+        //     while let Some(entry) = { cursor.next() } {
+        //         if kern.scheduler.tcbs.get(*entry.tcb_ref).is_some() {
+        //             cursor.remove_current();
+        //         }
+        //     }
+        // }
         let task = kern
             .tasks
             .get_mut(task_ref.0)
@@ -291,8 +295,8 @@ unsafe impl SysCall for PanikCall {
         let next_thread = kern
             .scheduler
             .next_thread(0)
-            .unwrap_or_else(ThreadRef::idle);
-        let next_thread = kern.scheduler.switch_thread(next_thread, false)?;
+            .unwrap_or_else(DomainEntry::idle);
+        let next_thread = kern.scheduler.switch_thread(next_thread)?;
         Ok(CallReturn::Replace { next_thread })
     }
 }
@@ -387,6 +391,7 @@ fn get_buf<'t, const N: usize>(
     Ok(slice)
 }
 
+#[derive(Format)]
 pub enum CallReturn {
     Replace {
         next_thread: ThreadRef,

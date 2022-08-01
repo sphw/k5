@@ -15,7 +15,7 @@ mycelium_bitfield::bitfield! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, defmt::Format, PartialEq)]
 #[repr(u8)]
 pub enum SyscallFn {
     Send = 0x0,
@@ -98,7 +98,7 @@ pub enum SyscallReturnType {
 }
 
 mycelium_bitfield::bitfield! {
-    #[derive( Eq, PartialEq)]
+    #[derive( Eq, PartialEq, Format)]
     pub struct SyscallReturn<u64> {
         pub const SYSCALL_TYPE: SyscallReturnType;
         pub const SYSCALL_LEN = 22;
@@ -148,6 +148,7 @@ pub enum Error {
     BufferOverflow,
     PortNotOpen,
     InvalidCap,
+    InvalidLoan,
     Unknown(u8),
 }
 
@@ -159,6 +160,7 @@ impl From<u8> for Error {
             3 => Error::BufferOverflow,
             4 => Error::PortNotOpen,
             5 => Error::InvalidCap,
+            6 => Error::InvalidLoan,
             code => Error::Unknown(code),
         }
     }
@@ -172,6 +174,7 @@ impl From<Error> for u8 {
             Error::BufferOverflow => 3,
             Error::PortNotOpen => 4,
             Error::InvalidCap => 5,
+            Error::InvalidLoan => 6,
             Error::Unknown(code) => code,
         }
     }
@@ -195,7 +198,7 @@ impl From<usize> for CapRef {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, defmt::Format)]
+#[derive(Clone, Copy, Debug, PartialEq, defmt::Format, Eq)]
 #[repr(C)]
 pub struct ThreadRef(pub usize);
 

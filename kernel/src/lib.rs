@@ -8,6 +8,7 @@
 #![feature(naked_functions)]
 #![feature(maybe_uninit_uninit_array)]
 #![feature(maybe_uninit_array_assume_init)]
+#![feature(binary_heap_retain)]
 
 extern crate alloc;
 
@@ -23,6 +24,7 @@ mod task;
 mod task_ptr;
 mod tcb;
 
+use defmt::Format;
 use registry::Registry;
 use syscalls::{
     CallReturn, CallSysCall, CapsCall, ConnectCall, ListenCall, LogCall, PanikCall, RecvCall,
@@ -35,16 +37,12 @@ pub use builder::*;
 mod tests;
 
 use abi::{Cap, CapRef, Endpoint, RecvResp, SyscallArgs, SyscallIndex, ThreadRef};
-use alloc::boxed::Box;
+use alloc::{boxed::Box, collections::BinaryHeap};
 use cordyceps::{
     list::{self, Links},
     List,
 };
-use core::{
-    mem::{self, MaybeUninit},
-    ops::Range,
-    pin::Pin,
-};
+use core::{mem::MaybeUninit, ops::Range, pin::Pin};
 use heapless::Vec;
 use regions::{Region, RegionAttr, RegionTable};
 use scheduler::{Scheduler, ThreadTime};
@@ -52,7 +50,6 @@ use space::Space;
 use task::*;
 use task_ptr::{TaskPtr, TaskPtrMut};
 
-pub(crate) const PRIORITY_COUNT: usize = 8;
 pub(crate) const TCB_CAPACITY: usize = 16;
 
 pub struct Kernel {
@@ -87,20 +84,12 @@ impl Kernel {
             time: 20,
             loaned_tcb: None,
         };
-        const DOMAIN_ENTRY: MaybeUninit<List<DomainEntry>> = MaybeUninit::uninit();
-        let mut domains: [MaybeUninit<List<DomainEntry>>; PRIORITY_COUNT] =
-            [DOMAIN_ENTRY; PRIORITY_COUNT];
-        for d in &mut domains {
-            d.write(List::new());
-        }
-        // Safety: We just initialized every item in the array, so this transmute is safe
-        let domains: [List<DomainEntry>; PRIORITY_COUNT] = unsafe { mem::transmute(domains) };
         Ok(Kernel {
             scheduler: Scheduler {
                 tcbs: Space::default(),
                 current_thread,
                 exhausted_threads: List::new(),
-                domains,
+                wait_queue: BinaryHeap::default(),
             },
             registry: Registry::default(),
             epoch: 0,
@@ -167,6 +156,7 @@ impl Kernel {
         reply_endpoint: Option<Endpoint>,
     ) -> Result<(), KernelError> {
         let dest_tcb = self.scheduler.get_tcb_mut(endpoint.tcb_ref)?;
+        let is_call = reply_endpoint.is_some();
         dest_tcb.req_queue.push_back(Box::pin(IPCMsg {
             inner: Some(IPCMsgInner {
                 reply_endpoint,
@@ -196,6 +186,10 @@ impl Kernel {
                 self.scheduler
                     .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
             }
+        } else if is_call {
+            let dest_tcb_priority = dest_tcb.priority;
+            self.scheduler
+                .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
         }
         Ok(())
     }
@@ -237,7 +231,11 @@ impl Kernel {
         index: abi::SyscallIndex,
         args: &SyscallArgs,
     ) -> Result<CallReturn, KernelError> {
-        match index.get(abi::SyscallIndex::SYSCALL_FN) {
+        let f = index.get(abi::SyscallIndex::SYSCALL_FN);
+        if f != abi::SyscallFn::Log {
+            defmt::trace!("syscall index: {:?}", f);
+        }
+        match f {
             abi::SyscallFn::Send => {
                 SendCall::from_args(args).exec(index.get(SyscallIndex::SYSCALL_ARG_TYPE), self)
             }
@@ -283,17 +281,40 @@ pub enum KernelError {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TaskRef(pub usize);
 
-#[derive(Default)]
+#[derive(PartialEq, Eq, Debug, Format)]
 pub(crate) struct DomainEntry {
-    _links: list::Links<DomainEntry>,
-    tcb_ref: Option<ThreadRef>,
+    tcb_ref: ThreadRef,
+    loaned_tcb: Option<ThreadRef>,
+    priority: u8,
+}
+
+impl PartialOrd for DomainEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        self.priority.partial_cmp(&other.priority)
+    }
+}
+
+impl Ord for DomainEntry {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.priority.cmp(&other.priority)
+    }
 }
 
 impl DomainEntry {
-    pub fn new(tcb_ref: ThreadRef) -> Self {
+    pub fn new(tcb_ref: ThreadRef, loaned_tcb: Option<ThreadRef>, priority: u8) -> Self {
         Self {
-            tcb_ref: Some(tcb_ref),
-            _links: Default::default(),
+            tcb_ref,
+            loaned_tcb,
+            priority,
+        }
+    }
+
+    #[inline]
+    pub fn idle() -> Self {
+        Self {
+            tcb_ref: ThreadRef::idle(),
+            loaned_tcb: None,
+            priority: 0,
         }
     }
 }

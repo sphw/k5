@@ -6,8 +6,10 @@ extern crate alloc;
 
 use alloc_cortex_m::CortexMHeap;
 use core::{mem::MaybeUninit, panic::PanicInfo};
-use cortex_m_rt::entry;
+use cortex_m_rt::{entry, exception};
 use defmt::{error, info};
+use kernel::RegionBuilder;
+use stm32l5::stm32l562;
 
 kernel::include_task_table! {}
 
@@ -23,23 +25,31 @@ fn main() -> ! {
         // Safety: we only ever access this once durring init, so this operation is safe
         crate::ALLOCATOR.init(unsafe { HEAP })
     }
+
     let mut kernel = kernel::KernelBuilder::new(task_table::TASKS);
     let _idle = kernel.idle_thread(task_table::IDLE);
+
     let bar_thread = kernel.thread(
         task_table::BAR
             .priority(7)
-            .budget(20)
-            .cooldown(10)
+            .budget(100)
+            .cooldown(50)
             .connect(*b"0123456789abcdef"),
     );
-
     let foo_thread = kernel.thread(
         task_table::FOO
             .priority(7)
-            .budget(1)
+            .budget(5)
             .cooldown(usize::MAX)
+            .loan_mem(RegionBuilder::device(stm32l562::RCC::PTR).write().read())
+            .loan_mem(RegionBuilder::device(stm32l562::GPIOA::PTR).write().read())
+            .loan_mem(RegionBuilder::device(stm32l562::GPIOD::PTR).write().read())
+            .loan_mem(RegionBuilder::device(stm32l562::GPIOG::PTR).write().read())
+            .loan_mem(RegionBuilder::device(stm32l562::PWR::PTR).write().read())
+            .loan_mem(RegionBuilder::device(stm32l562::FLASH::PTR).write().read())
             .listen(*b"0123456789abcdef"),
     );
+
     kernel.endpoint(bar_thread, foo_thread, 0);
     info!("booting");
     kernel.start()
@@ -59,4 +69,23 @@ fn panic(info: &PanicInfo) -> ! {
     loop {
         cortex_m::asm::bkpt();
     }
+}
+
+#[exception]
+unsafe fn HardFault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
+    defmt::println!("{:?}", defmt::Debug2Format(ef));
+    defmt::println!(
+        "MemFault reg {:b}",
+        core::ptr::read_volatile(0xE000ED28 as *const u16)
+    );
+    defmt::println!(
+        "MemFault addr: {:x}",
+        core::ptr::read_volatile(0xE000ED34 as *const u32)
+    );
+    defmt::println!(
+        "UsageFault reg {:b}",
+        core::ptr::read_volatile(0xE000ED2A as *const u16)
+    );
+
+    loop {}
 }

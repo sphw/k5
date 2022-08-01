@@ -65,7 +65,8 @@ pub(crate) fn start_root_task(task: &Task, tcb: &Tcb) -> ! {
     // since if called in an interrupt handler it can lead to some bad side-effects
     // This whole function is only called once from `main`, so its safe
     unsafe {
-        p.SCB.set_priority(SystemHandler::SysTick, 0xff);
+        p.SCB.set_priority(SystemHandler::SVCall, 0xFF);
+        p.SCB.set_priority(SystemHandler::SysTick, 0xFF);
     }
 
     let irq_count = (((p.ICB.ictr.read() & 0xF) + 1) * 32) as usize;
@@ -81,7 +82,7 @@ pub(crate) fn start_root_task(task: &Task, tcb: &Tcb) -> ! {
         }
     }
 
-    p.SYST.set_reload(400_000);
+    p.SYST.set_reload(20_000);
     p.SYST.clear_current();
     p.SYST.enable_counter();
     p.SYST.enable_interrupt();

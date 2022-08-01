@@ -3,15 +3,23 @@
 #![feature(naked_functions)]
 #![feature(asm_sym)]
 
+use stm32_hal2::clocks::Clocks;
+use stm32_hal2::gpio::{Pin, PinMode, Port};
 use userspace::CapExt;
 
 #[export_name = "main"]
 pub fn main() -> ! {
+    let clock_cfg = Clocks::default();
+    clock_cfg.setup().unwrap();
+    let mut led = Pin::new(Port::D, 3, PinMode::Output);
+    led.set_low();
+
     let caps = userspace::caps().unwrap();
     defmt::println!("{:?}", &*caps);
     caps[0].cap_ref.listen().unwrap();
     defmt::println!("listen");
     let mut buf = [0u8; 10];
+    let mut toggle = false;
     loop {
         match userspace::recv(0, &mut buf) {
             Ok(resp) => {
@@ -21,6 +29,12 @@ pub fn main() -> ! {
                     if let Err(err) = cap.send(&mut buf) {
                         defmt::error!("syscall err: {:?}", err);
                     }
+                    if toggle {
+                        led.set_low();
+                    } else {
+                        led.set_high();
+                    }
+                    toggle = !toggle;
                 }
             }
             Err(err) => {

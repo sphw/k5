@@ -15,7 +15,7 @@ pub fn main() -> ! {
     let mut a: u32 = 20;
     loop {
         a += 1;
-        if a % 50000 == 0 {
+        if a % 100000 == 0 {
             let mut buf = [0xFFu8; 10];
             buf[0..4].copy_from_slice(&a.to_be_bytes());
             info!("send {:?}", buf);
