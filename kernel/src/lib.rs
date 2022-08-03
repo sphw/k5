@@ -176,7 +176,7 @@ impl Kernel {
                 };
                 let task = self
                     .tasks
-                    .get(dest_tcb.task.0)
+                    .get_mut(dest_tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
                 if let RecvRes::NotFound(_) = dest_tcb.recv(task, recv_req)? {
                     panic!("recv not found")

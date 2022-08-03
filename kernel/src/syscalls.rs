@@ -151,7 +151,7 @@ unsafe impl SysCall for RecvCall {
         let tcb = kern.scheduler.current_thread_mut()?;
         let task = kern
             .tasks
-            .get(tcb.task.0)
+            .get_mut(tcb.task.0)
             .ok_or(KernelError::InvalidTaskRef)?;
         if let RecvRes::NotFound(req) = tcb.recv(task, recv_req)? {
             Ok(CallReturn::Replace {

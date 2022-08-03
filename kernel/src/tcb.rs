@@ -5,8 +5,8 @@ use alloc::boxed::Box;
 use cordyceps::{list::Links, List};
 
 use crate::{
-    arch, task_ptr::TaskPtrMut, CapEntry, IPCMsg, IPCMsgBody, KernelError, Task, TaskRef,
-    ThreadState,
+    arch, regions::RegionAttr, task::Loan, task_ptr::TaskPtrMut, CapEntry, IPCMsg, IPCMsgBody,
+    KernelError, Task, TaskRef, ThreadState,
 };
 
 #[repr(C)]
@@ -97,7 +97,7 @@ impl Tcb {
 
     pub(crate) fn recv<'r>(
         &mut self,
-        task: &Task,
+        task: &mut Task,
         req: RecvReq<'r>,
     ) -> Result<RecvRes<'r>, KernelError> {
         match self.recv_inner(task, req) {
@@ -124,7 +124,7 @@ impl Tcb {
     #[inline]
     fn recv_inner<'r>(
         &mut self,
-        task: &Task,
+        task: &mut Task,
         req: RecvReq<'r>,
     ) -> Result<RecvRes<'r>, KernelError> {
         let mut cursor = self.req_queue.cursor_front_mut();
@@ -164,16 +164,24 @@ impl Tcb {
                     },
                 )
             }
-            IPCMsgBody::Page(ptr) => (
-                RecvRes::Page,
-                RecvResp {
-                    cap: None,
-                    inner: abi::RecvRespInner::Page {
-                        addr: ptr.addr(),
-                        len: ptr.size(),
+            IPCMsgBody::Page(ptr) => {
+                task.push_loan(Loan {
+                    region: crate::regions::Region {
+                        range: ptr.range(),
+                        attr: RegionAttr::Write | RegionAttr::Read, // TODO: it may be prudent to allow this to be configured by the call
                     },
-                },
-            ),
+                })?;
+                (
+                    RecvRes::Page,
+                    RecvResp {
+                        cap: None,
+                        inner: abi::RecvRespInner::Page {
+                            addr: ptr.addr(),
+                            len: ptr.size(),
+                        },
+                    },
+                )
+            }
         };
 
         if let Some(reply) = msg.reply_endpoint {
