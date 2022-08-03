@@ -27,7 +27,9 @@ Right now there is some basic functionality mainly for ARMv8M. There is an examp
 ## Demo
 Here's a quick demo of the logging system, and two tasks sending between each other. You can find this code in `./examples`
 
-[![asciicast](https://asciinema.org/a/509730.svg)](https://asciinema.org/a/509730)
+
+https://user-images.githubusercontent.com/83453/182531555-86ca0590-076e-43f3-b297-43611c96187a.mov
+
 
 
 ## What's Next
