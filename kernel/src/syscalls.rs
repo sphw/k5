@@ -9,7 +9,7 @@ use defmt::{error, Format};
 use crate::{
     task::TaskState,
     task_ptr::{TaskPtr, TaskPtrMut},
-    tcb::Tcb,
+    tcb::{RecvReq, RecvReqInner, RecvRes, Tcb},
     CapEntry, DomainEntry, Kernel, KernelError,
 };
 
@@ -99,7 +99,15 @@ unsafe impl SysCall for CallSysCall {
         // Safety: the caller is giving over memory to us, to overwrite
         // TaskPtrMut ensures that the memory belongs to the correct task
             unsafe { TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(self.resp_addr, ()) };
-        let next_thread = kern.call(self.cap_ref, msg, out_buf, recv_resp)?;
+        let next_thread = kern.call(
+            self.cap_ref,
+            msg,
+            RecvReq {
+                mask: 0, // NOTE: this is replaced by the endpoints addr in `call`
+                resp: recv_resp,
+                inner: RecvReqInner::Buf { out: out_buf },
+            },
+        )?;
         Ok(CallReturn::Switch {
             next_thread,
             ret: abi::SyscallReturn::new(),
@@ -122,36 +130,35 @@ unsafe impl SysCall for RecvCall {
         arg_type: SyscallDataType,
         kern: &mut Kernel,
     ) -> Result<CallReturn, KernelError> {
-        if arg_type == SyscallDataType::Page {
-            todo!()
-        }
-        let out_buf =
+        let recv_req_inner = if arg_type == SyscallDataType::Page {
+            RecvReqInner::Page
+        } else {
+            let out_buf =
         // Safety: the caller is giving over memory to us, to overwrite
         // TaskPtrMut ensures that the memory belongs to the correct task
             unsafe { TaskPtrMut::<'_, [u8]>::from_raw_parts(self.out_addr, self.out_len as usize) };
+            RecvReqInner::Buf { out: out_buf }
+        };
         let recv_resp =
         // Safety: the caller is giving over memory to us, to overwrite
         // TaskPtrMut ensures that the memory belongs to the correct task
             unsafe { TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(self.resp_addr, ()) };
+        let recv_req = RecvReq {
+            mask: self.mask,
+            resp: recv_resp,
+            inner: recv_req_inner,
+        };
         let tcb = kern.scheduler.current_thread_mut()?;
         let task = kern
             .tasks
             .get(tcb.task.0)
             .ok_or(KernelError::InvalidTaskRef)?;
-        if !tcb.recv(task, self.mask, out_buf, recv_resp)? {
-            let out_buf =
-            // Safety: the caller is giving over memory to us, to overwrite
-            // TaskPtrMut ensures that the memory belongs to the correct task
-                unsafe { TaskPtrMut::<'_, [u8]>::from_raw_parts(self.out_addr, self.out_len) };
-            // Safety: the caller is giving over memory to us, to overwrite
-            // TaskPtrMut ensures that the memory belongs to the correct task
-            let recv_resp = unsafe {
-                TaskPtrMut::<'_, MaybeUninit<RecvResp>>::from_raw_parts(self.resp_addr, ())
-            };
+        if let RecvRes::NotFound(req) = tcb.recv(task, recv_req)? {
             Ok(CallReturn::Replace {
-                next_thread: kern.scheduler.wait(self.mask, out_buf, recv_resp, false)?,
+                next_thread: kern.scheduler.wait(req, false)?,
             })
         } else {
+            defmt::println!("got msg in recv");
             Ok(CallReturn::Return {
                 ret: abi::SyscallReturn::new()
                     .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
@@ -249,15 +256,6 @@ unsafe impl SysCall for PanikCall {
                 false
             }
         });
-        // for domain in &mut kern.scheduler.domains {
-        //     let mut cursor = domain.cursor_front_mut();
-        //     cursor.move_prev();
-        //     while let Some(entry) = { cursor.next() } {
-        //         if kern.scheduler.tcbs.get(*entry.tcb_ref).is_some() {
-        //             cursor.remove_current();
-        //         }
-        //     }
-        // }
         let task = kern
             .tasks
             .get_mut(task_ref.0)
@@ -286,7 +284,11 @@ unsafe impl SysCall for PanikCall {
                 }
             }
         }
-        let (priority, budget, cooldown, caps) = if let Some(priority) = priority && let Some(budget) = budget && let Some(cooldown) = cooldown && let Some(caps) =  caps {
+        let (priority, budget, cooldown, caps) =
+            if let Some(priority) = priority
+                && let Some(budget) = budget
+                && let Some(cooldown) = cooldown
+                && let Some(caps) =  caps {
                     (priority, budget, cooldown, caps)
                 }else {
                     return Err(KernelError:: InitTCBNotFound);

@@ -1,4 +1,4 @@
-use core::ptr::Pointee;
+use core::{mem, ptr::Pointee};
 
 #[derive(Copy, Clone)]
 #[repr(transparent)]
@@ -41,11 +41,15 @@ impl<'a, T: Pointee + ?Sized> TaskPtrMut<'a, T> {
         self.ptr
     }
 
-    #[allow(dead_code)]
     #[inline]
     pub(crate) fn addr(&self) -> usize {
         let (ptr, _) = (self.ptr as *const T).to_raw_parts();
         ptr.addr()
+    }
+
+    #[inline]
+    pub(crate) fn size(&self) -> usize {
+        mem::size_of_val(self.ptr)
     }
 }
 

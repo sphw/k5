@@ -36,13 +36,13 @@ pub use builder::*;
 #[cfg(test)]
 mod tests;
 
-use abi::{Cap, CapRef, Endpoint, RecvResp, SyscallArgs, SyscallIndex, ThreadRef};
+use abi::{Cap, CapRef, Endpoint, SyscallArgs, SyscallIndex, ThreadRef};
 use alloc::{boxed::Box, collections::BinaryHeap};
 use cordyceps::{
     list::{self, Links},
     List,
 };
-use core::{mem::MaybeUninit, ops::Range, pin::Pin};
+use core::{ops::Range, pin::Pin};
 use heapless::Vec;
 use regions::{Region, RegionAttr, RegionTable};
 use scheduler::{Scheduler, ThreadTime};
@@ -158,22 +158,19 @@ impl Kernel {
         let dest_tcb = self.scheduler.get_tcb_mut(endpoint.tcb_ref)?;
         let is_call = reply_endpoint.is_some();
         dest_tcb.req_queue.push_back(Box::pin(IPCMsg {
-            inner: Some(IPCMsgInner {
-                reply_endpoint,
-                body,
-            }),
+            reply_endpoint,
+            body: IPCMsgBody::Buf(body),
             _links: Links::default(),
             addr: endpoint.addr,
         }));
 
-        if let ThreadState::Waiting { addr, .. } = dest_tcb.state {
+        if let ThreadState::Waiting { ref recv_req } = dest_tcb.state {
+            let addr = recv_req.mask;
             if addr & endpoint.addr == endpoint.addr {
-                let (buf, recv_resp) = if let ThreadState::Waiting {
-                    out_buf, recv_resp, ..
-                } =
+                let recv_req = if let ThreadState::Waiting { recv_req } =
                     core::mem::replace(&mut dest_tcb.state, ThreadState::Ready)
                 {
-                    (out_buf, recv_resp)
+                    recv_req
                 } else {
                     unreachable!()
                 };
@@ -181,7 +178,9 @@ impl Kernel {
                     .tasks
                     .get(dest_tcb.task.0)
                     .ok_or(KernelError::InvalidTaskRef)?;
-                assert!(dest_tcb.recv(task, addr, buf, recv_resp)?);
+                if let RecvRes::NotFound(_) = dest_tcb.recv(task, recv_req)? {
+                    panic!("recv not found")
+                }
                 let dest_tcb_priority = dest_tcb.priority;
                 self.scheduler
                     .add_thread(dest_tcb_priority, endpoint.tcb_ref)?;
@@ -200,8 +199,7 @@ impl Kernel {
         &mut self,
         dest: CapRef,
         msg: Box<[u8]>,
-        out_buf: TaskPtrMut<'static, [u8]>,
-        recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
+        mut recv_req: RecvReq<'static>,
     ) -> Result<ThreadRef, KernelError> {
         let src_ref = self.scheduler.current_thread.tcb_ref;
         let endpoint = self.scheduler.current_thread_mut()?.endpoint(dest)?;
@@ -210,9 +208,9 @@ impl Kernel {
             addr: endpoint.addr | 0x80000000,
             disposable: true,
         };
+        recv_req.mask = reply_endpoint.addr;
         self.send_inner(endpoint, msg, Some(reply_endpoint))?;
-        self.scheduler
-            .wait(endpoint.addr | 0x80000000, out_buf, recv_resp, true) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
+        self.scheduler.wait(recv_req, true) // last bit is flipped for reply TODO(sphw): replace with proper bitmask
     }
 
     pub(crate) fn start(&mut self) -> ! {
@@ -278,6 +276,12 @@ pub enum KernelError {
     ABI(abi::Error),
 }
 
+impl From<abi::Error> for KernelError {
+    fn from(v: abi::Error) -> Self {
+        Self::ABI(v)
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TaskRef(pub usize);
 
@@ -320,12 +324,9 @@ impl DomainEntry {
 }
 
 #[repr(C)]
-#[derive(Debug)]
 enum ThreadState {
     Waiting {
-        addr: usize,
-        out_buf: TaskPtrMut<'static, [u8]>,
-        recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
+        recv_req: RecvReq<'static>,
     },
     Ready,
     #[allow(dead_code)]
@@ -337,17 +338,16 @@ struct CapEntry {
     cap: Cap,
 }
 
-#[derive(Default)]
 pub(crate) struct IPCMsg {
     _links: list::Links<IPCMsg>,
     addr: usize,
-    inner: Option<IPCMsgInner>,
+    reply_endpoint: Option<Endpoint>,
+    body: IPCMsgBody,
 }
 
-#[repr(C)]
-pub(crate) struct IPCMsgInner {
-    reply_endpoint: Option<Endpoint>,
-    body: Box<[u8]>,
+enum IPCMsgBody {
+    Buf(Box<[u8]>),
+    Page(TaskPtrMut<'static, [u8]>),
 }
 
 #[macro_export]

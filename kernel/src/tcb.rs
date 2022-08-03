@@ -5,7 +5,8 @@ use alloc::boxed::Box;
 use cordyceps::{list::Links, List};
 
 use crate::{
-    arch, task_ptr::TaskPtrMut, CapEntry, IPCMsg, KernelError, Task, TaskRef, ThreadState,
+    arch, task_ptr::TaskPtrMut, CapEntry, IPCMsg, IPCMsgBody, KernelError, Task, TaskRef,
+    ThreadState,
 };
 
 #[repr(C)]
@@ -94,13 +95,38 @@ impl Tcb {
         }));
     }
 
-    pub(crate) fn recv(
+    pub(crate) fn recv<'r>(
         &mut self,
         task: &Task,
-        mask: usize,
-        out_buf: TaskPtrMut<'_, [u8]>,
-        recv_resp: TaskPtrMut<'_, MaybeUninit<RecvResp>>,
-    ) -> Result<bool, KernelError> {
+        req: RecvReq<'r>,
+    ) -> Result<RecvRes<'r>, KernelError> {
+        match self.recv_inner(task, req) {
+            res @ Ok(RecvRes::Copy) => {
+                self.saved_state.set_syscall_return(
+                    SyscallReturn::new().with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
+                );
+                res
+            }
+            res @ Ok(RecvRes::Page) => {
+                self.saved_state.set_syscall_return(
+                    SyscallReturn::new().with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Page),
+                );
+                res
+            }
+            Err(KernelError::ABI(err)) => {
+                self.saved_state.set_syscall_return(err.into());
+                Ok(RecvRes::Page)
+            }
+            res => res,
+        }
+    }
+
+    #[inline]
+    fn recv_inner<'r>(
+        &mut self,
+        task: &Task,
+        req: RecvReq<'r>,
+    ) -> Result<RecvRes<'r>, KernelError> {
         let mut cursor = self.req_queue.cursor_front_mut();
         cursor.move_prev();
         let mut found = false;
@@ -108,41 +134,73 @@ impl Tcb {
             cursor.move_next();
             cursor.current()
         } {
-            if msg.addr & mask == mask {
+            if msg.addr & req.mask == req.mask {
                 found = true;
                 break;
             }
         }
         if !found {
-            return Ok(false);
+            return Ok(RecvRes::NotFound(req));
         }
-        let msg = cursor.remove_current().unwrap(); // found will only ever be set when there is a msg
-        let out_buf = task
-            .validate_mut_ptr(out_buf)
-            .ok_or(KernelError::InvalidTaskPtr)?;
-        let inner = &msg.inner.as_ref().unwrap();
-        if out_buf.len() != inner.body.len() {
-            self.saved_state
-                .set_syscall_return(abi::Error::ReturnTypeMismatch.into());
-            return Ok(true);
-        }
-        out_buf.copy_from_slice(&inner.body);
-        self.saved_state.set_syscall_return(
-            SyscallReturn::new().with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Copy),
-        );
-        let recv_resp = task
-            .validate_mut_ptr(recv_resp)
-            .ok_or(KernelError::InvalidTaskPtr)?; // TODO: make syscall return
-        let recv_resp = recv_resp.write(RecvResp {
-            cap: None,
-            inner: abi::RecvRespInner::Copy(inner.body.len()),
-        });
-        if let Some(reply) = inner.reply_endpoint {
+        let msg = cursor.remove_current().unwrap();
+        let (recv_res, mut resp) = match &msg.body {
+            IPCMsgBody::Buf(buf) => {
+                let out = if let RecvReqInner::Buf { out } = req.inner {
+                    out
+                } else {
+                    return Err(abi::Error::ReturnTypeMismatch.into());
+                };
+
+                let out_buf = task.validate_mut_ptr(out).ok_or(abi::Error::BadAccess)?;
+                if out_buf.len() != buf.len() {
+                    return Err(abi::Error::ReturnTypeMismatch.into());
+                }
+                out_buf.copy_from_slice(buf);
+                (
+                    RecvRes::Copy,
+                    RecvResp {
+                        cap: None,
+                        inner: abi::RecvRespInner::Copy(buf.len()),
+                    },
+                )
+            }
+            IPCMsgBody::Page(ptr) => (
+                RecvRes::Page,
+                RecvResp {
+                    cap: None,
+                    inner: abi::RecvRespInner::Page {
+                        addr: ptr.addr(),
+                        len: ptr.size(),
+                    },
+                },
+            ),
+        };
+
+        if let Some(reply) = msg.reply_endpoint {
             self.add_cap(Cap::Endpoint(reply));
             let cap_ptr = &*self.capabilities.back().unwrap() as *const CapEntry;
-            recv_resp.cap = Some(CapRef(cap_ptr.addr()));
+            resp.cap = Some(CapRef(cap_ptr.addr()));
         }
-        drop(msg);
-        Ok(true)
+        let recv_resp = task
+            .validate_mut_ptr(req.resp)
+            .ok_or(abi::Error::BadAccess)?;
+        recv_resp.write(resp);
+        Ok(recv_res)
     }
+}
+
+pub(crate) struct RecvReq<'a> {
+    pub(crate) mask: usize,
+    pub(crate) resp: TaskPtrMut<'a, MaybeUninit<RecvResp>>,
+    pub(crate) inner: RecvReqInner<'a>,
+}
+pub(crate) enum RecvReqInner<'a> {
+    Page,
+    Buf { out: TaskPtrMut<'a, [u8]> },
+}
+
+pub(crate) enum RecvRes<'a> {
+    Page,
+    Copy,
+    NotFound(RecvReq<'a>),
 }
