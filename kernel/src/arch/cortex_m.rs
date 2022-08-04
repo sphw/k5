@@ -489,7 +489,9 @@ fn apply_region(i: usize, region: &Region, mpu: &cortex_m::peripheral::mpu::Regi
 }
 
 fn clear_region(i: usize, mpu: &cortex_m::peripheral::mpu::RegisterBlock) {
+    // Safety: writes the region num, no impact on memory safety
     unsafe { mpu.rnr.write(i as u32) };
+    // Safety: clears the particular region, no impact on memory safety
     unsafe { mpu.rlar.write(0) };
 }
 

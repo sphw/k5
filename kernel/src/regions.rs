@@ -1,6 +1,4 @@
 use core::ops::Range;
-
-use defmt::Format;
 use enumflags2::{bitflags, BitFlags};
 
 use crate::KernelError;

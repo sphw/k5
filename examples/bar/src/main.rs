@@ -4,7 +4,7 @@
 #![feature(asm_sym)]
 
 use defmt::{info, println};
-use userspace::CapExt;
+use userspace::{CapExt, Page};
 
 #[export_name = "main"]
 pub fn main() -> ! {
@@ -16,15 +16,11 @@ pub fn main() -> ! {
     loop {
         a += 1;
         if a % 100000 == 0 {
-            let mut buf = AlignedBytes([0xFFu8; 32]);
+            let mut buf = Page([0xFFu8; 32]);
             buf.0[0..4].copy_from_slice(&a.to_be_bytes());
             info!("send {:?} {:x}", buf.0, buf.0.as_ptr());
-            let resp = endpoint.call_io(&mut buf.0);
+            let resp = endpoint.call_io(&mut buf);
             info!("resp {:?}, buf {:?}", resp, buf.0);
         }
     }
 }
-
-#[derive(Clone, Copy, Debug)]
-#[repr(C, align(32))]
-pub struct AlignedBytes<const N: usize>(pub [u8; N]);

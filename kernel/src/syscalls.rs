@@ -361,7 +361,7 @@ unsafe impl SysCall for ConnectCall {
     }
 }
 
-fn get_msg<'t>(
+fn get_msg(
     kern: &mut Kernel,
     arg_type: SyscallDataType,
     addr: usize,

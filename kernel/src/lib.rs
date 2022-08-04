@@ -49,7 +49,7 @@ use regions::{Region, RegionTable};
 use scheduler::{Scheduler, ThreadTime};
 use space::Space;
 use task::*;
-use task_ptr::{TaskPtr, TaskPtrMut};
+use task_ptr::TaskPtr;
 
 pub(crate) const TCB_CAPACITY: usize = 16;
 

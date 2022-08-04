@@ -1,7 +1,6 @@
-use crate::regions::{Region, RegionTable};
-use crate::space::Space;
+use crate::arch;
+use crate::regions::RegionTable;
 use crate::task_ptr::{TaskPtr, TaskPtrMut};
-use crate::{arch, KernelError};
 use core::ops::Range;
 use heapless::Vec;
 

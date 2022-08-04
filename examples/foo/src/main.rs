@@ -21,23 +21,20 @@ pub fn main() -> ! {
     let mut buf = [0u8; 10];
     let mut toggle = false;
     loop {
-        match userspace::recv(0, &mut buf) {
+        match userspace::recv::<_, [u8; 32]>(0, &mut buf) {
             Ok(resp) => {
                 defmt::println!("resp: {:?} buf: {:?}", resp, buf);
                 if let Some(cap) = resp.cap {
-                    match resp.inner {
-                        userspace::abi::RecvRespInner::Copy(len) => {
+                    match resp.body {
+                        userspace::RecvRespBody::Copy(_) => {
                             buf[1..].copy_from_slice(&[0xA; 9]);
                             if let Err(err) = cap.send(&mut buf) {
                                 defmt::error!("syscall err: {:?}", err);
                             }
                         }
-                        userspace::abi::RecvRespInner::Page { addr, len } => {
-                            let buf =
-                                unsafe { core::slice::from_raw_parts_mut(addr as *mut u8, len) };
-                            defmt::println!("addr : {:x}", addr);
+                        userspace::RecvRespBody::Page(mut buf) => {
                             defmt::println!("got slice: {:?}", buf);
-                            buf[1..].copy_from_slice(&[0xA; 31]);
+                            buf[2..].copy_from_slice(&[0xA; 30]);
                             defmt::println!("wrote");
                             if let Err(err) = cap.send_page(buf) {
                                 defmt::error!("syscall err: {:?}", err);
