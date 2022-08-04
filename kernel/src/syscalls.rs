@@ -7,10 +7,11 @@ use abi::{
 use defmt::{error, Format};
 
 use crate::{
+    regions::Region,
     task::TaskState,
     task_ptr::{TaskPtr, TaskPtrMut},
     tcb::{RecvReq, RecvReqInner, RecvRes, Tcb},
-    CapEntry, DomainEntry, IPCMsgBody, Kernel, KernelError,
+    CapEntry, DomainEntry, IPCMsgBody, Kernel, KernelError, RegionAttr,
 };
 
 #[repr(C)]
@@ -44,10 +45,10 @@ unsafe impl SysCall for SendCall {
         arg_type: SyscallDataType,
         kern: &mut Kernel,
     ) -> Result<CallReturn, KernelError> {
+        let msg = get_msg(kern, arg_type, self.buf_addr, self.buf_len)?;
+        kern.send(self.cap_ref, msg)?;
         let tcb = kern.scheduler.current_thread()?;
         let priority = tcb.priority;
-        let msg = get_msg(&kern, arg_type, tcb, self.buf_addr, self.buf_len)?;
-        kern.send(self.cap_ref, msg)?;
         let next_thread = kern.scheduler.next_thread(priority);
         Ok(match next_thread {
             Some(next_thread) => CallReturn::Switch {
@@ -81,8 +82,7 @@ unsafe impl SysCall for CallSysCall {
         arg_type: SyscallDataType,
         kern: &mut Kernel,
     ) -> Result<CallReturn, KernelError> {
-        let tcb = kern.scheduler.current_thread()?;
-        let msg = get_msg(&kern, arg_type, tcb, self.in_addr, self.in_len)?;
+        let msg = get_msg(kern, arg_type, self.in_addr, self.in_len)?;
         let out_buf =
         // Safety: the caller is giving over memory to us, to overwrite
         // TaskPtrMut ensures that the memory belongs to the correct task
@@ -362,12 +362,12 @@ unsafe impl SysCall for ConnectCall {
 }
 
 fn get_msg<'t>(
-    kern: &Kernel,
+    kern: &mut Kernel,
     arg_type: SyscallDataType,
-    tcb: &'t Tcb,
     addr: usize,
     len: usize,
 ) -> Result<IPCMsgBody, KernelError> {
+    let tcb = kern.scheduler.current_thread()?;
     match arg_type {
         SyscallDataType::Short => todo!(),
         SyscallDataType::Copy => {
@@ -377,7 +377,7 @@ fn get_msg<'t>(
         SyscallDataType::Page => {
             let task = kern
                 .tasks
-                .get(tcb.task.0)
+                .get_mut(tcb.task.0)
                 .ok_or(KernelError::InvalidTaskRef)?;
             // Safety: the caller is giving over memory to us, to overwrite
             // TaskPtrMut ensures that the memory belongs to the correct task
@@ -387,6 +387,10 @@ fn get_msg<'t>(
             } else {
                 return Err(KernelError::ABI(abi::Error::BadAccess));
             };
+            task.region_table.pop(Region {
+                range: addr..addr + len,
+                attr: RegionAttr::Write | RegionAttr::Read | RegionAttr::Exec,
+            });
             Ok(IPCMsgBody::Page(slice))
         }
     }
