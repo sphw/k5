@@ -10,7 +10,7 @@ use crate::{
     task::TaskState,
     task_ptr::{TaskPtr, TaskPtrMut},
     tcb::{RecvReq, RecvReqInner, RecvRes, Tcb},
-    CapEntry, DomainEntry, Kernel, KernelError,
+    CapEntry, DomainEntry, IPCMsgBody, Kernel, KernelError,
 };
 
 #[repr(C)]
@@ -44,13 +44,9 @@ unsafe impl SysCall for SendCall {
         arg_type: SyscallDataType,
         kern: &mut Kernel,
     ) -> Result<CallReturn, KernelError> {
-        if arg_type == SyscallDataType::Page {
-            todo!()
-        }
         let tcb = kern.scheduler.current_thread()?;
-        let slice = get_buf::<1024>(kern, tcb, self.buf_addr, self.buf_len)?;
-        let msg = alloc::boxed::Box::from(slice);
         let priority = tcb.priority;
+        let msg = get_msg(&kern, arg_type, tcb, self.buf_addr, self.buf_len)?;
         kern.send(self.cap_ref, msg)?;
         let next_thread = kern.scheduler.next_thread(priority);
         Ok(match next_thread {
@@ -85,12 +81,8 @@ unsafe impl SysCall for CallSysCall {
         arg_type: SyscallDataType,
         kern: &mut Kernel,
     ) -> Result<CallReturn, KernelError> {
-        if arg_type == SyscallDataType::Page {
-            todo!()
-        }
         let tcb = kern.scheduler.current_thread()?;
-        let slice = get_buf::<1024>(kern, tcb, self.in_addr, self.in_len)?;
-        let msg = alloc::boxed::Box::from(slice);
+        let msg = get_msg(&kern, arg_type, tcb, self.in_addr, self.in_len)?;
         let out_buf =
         // Safety: the caller is giving over memory to us, to overwrite
         // TaskPtrMut ensures that the memory belongs to the correct task
@@ -369,6 +361,37 @@ unsafe impl SysCall for ConnectCall {
     }
 }
 
+fn get_msg<'t>(
+    kern: &Kernel,
+    arg_type: SyscallDataType,
+    tcb: &'t Tcb,
+    addr: usize,
+    len: usize,
+) -> Result<IPCMsgBody, KernelError> {
+    match arg_type {
+        SyscallDataType::Short => todo!(),
+        SyscallDataType::Copy => {
+            let slice = get_buf::<1024>(kern, tcb, addr, len)?;
+            Ok(IPCMsgBody::Buf(alloc::boxed::Box::from(slice)))
+        }
+        SyscallDataType::Page => {
+            let task = kern
+                .tasks
+                .get(tcb.task.0)
+                .ok_or(KernelError::InvalidTaskRef)?;
+            // Safety: the caller is giving over memory to us, to overwrite
+            // TaskPtrMut ensures that the memory belongs to the correct task
+            let slice = unsafe { TaskPtrMut::<'_, [u8]>::from_raw_parts(addr, len) };
+            let slice = if let Some(slice) = task.validate_mut_ptr(slice) {
+                slice
+            } else {
+                return Err(KernelError::ABI(abi::Error::BadAccess));
+            };
+            Ok(IPCMsgBody::Page(slice))
+        }
+    }
+}
+
 fn get_buf<'t, const N: usize>(
     kern: &Kernel,
     tcb: &'t Tcb,
@@ -387,9 +410,6 @@ fn get_buf<'t, const N: usize>(
     } else {
         return Err(KernelError::ABI(abi::Error::BadAccess));
     };
-    if slice.len() > N {
-        return Err(KernelError::ABI(abi::Error::BufferOverflow));
-    }
     Ok(slice)
 }
 

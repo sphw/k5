@@ -15,7 +15,6 @@ pub(crate) struct Task {
     pub(crate) entrypoint: TaskPtr<'static, fn() -> !>,
     pub(crate) secure: bool,
     pub(crate) state: TaskState,
-    pub(crate) loans: Space<Loan, 16>,
 }
 
 #[repr(u8)]
@@ -41,7 +40,6 @@ impl Task {
             secure,
             entrypoint,
             state: TaskState::Pending,
-            loans: Space::default(),
         }
     }
 
@@ -90,30 +88,4 @@ impl Task {
             .available_stack_ptr
             .push(stack_start..stack_start + self.stack_size);
     }
-
-    pub(crate) fn push_loan(&mut self, loan: Loan) -> Result<LoanRef, KernelError> {
-        let i = self
-            .loans
-            .push(loan.clone())
-            .ok_or(KernelError::ABI(abi::Error::BufferOverflow))?;
-        self.region_table.push(loan.region)?;
-        Ok(LoanRef(i))
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn pop_loan(&mut self, loan_ref: LoanRef) -> Result<(), KernelError> {
-        let loan = self
-            .loans
-            .remove(loan_ref.0)
-            .ok_or(KernelError::ABI(abi::Error::InvalidLoan))?;
-        self.region_table.pop(loan.region);
-        Ok(())
-    }
 }
-
-#[derive(Clone)]
-pub(crate) struct Loan {
-    pub region: Region,
-}
-
-pub(crate) struct LoanRef(usize);

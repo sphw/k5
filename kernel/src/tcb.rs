@@ -5,8 +5,8 @@ use alloc::boxed::Box;
 use cordyceps::{list::Links, List};
 
 use crate::{
-    arch, regions::RegionAttr, task::Loan, task_ptr::TaskPtrMut, CapEntry, IPCMsg, IPCMsgBody,
-    KernelError, Task, TaskRef, ThreadState,
+    arch, regions::RegionAttr, task_ptr::TaskPtrMut, CapEntry, IPCMsg, IPCMsgBody, KernelError,
+    Task, TaskRef, ThreadState,
 };
 
 #[repr(C)]
@@ -164,20 +164,21 @@ impl Tcb {
                     },
                 )
             }
-            IPCMsgBody::Page(ptr) => {
-                task.push_loan(Loan {
-                    region: crate::regions::Region {
-                        range: ptr.range(),
-                        attr: RegionAttr::Write | RegionAttr::Read, // TODO: it may be prudent to allow this to be configured by the call
-                    },
+            IPCMsgBody::Page(slice) => {
+                let slice = *slice;
+                let addr = slice.as_ptr().addr();
+                task.region_table.push(crate::regions::Region {
+                    range: addr..addr + slice.len(),
+                    attr: RegionAttr::Write | RegionAttr::Read | RegionAttr::Exec, // TODO: it may be prudent to allow this to be configured by the call
                 })?;
+                //TODO(sphw): when porting to MPU we will need to use the addr from the page table
                 (
                     RecvRes::Page,
                     RecvResp {
                         cap: None,
                         inner: abi::RecvRespInner::Page {
-                            addr: ptr.addr(),
-                            len: ptr.size(),
+                            addr,
+                            len: slice.len(),
                         },
                     },
                 )

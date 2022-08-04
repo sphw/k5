@@ -25,9 +25,24 @@ pub fn main() -> ! {
             Ok(resp) => {
                 defmt::println!("resp: {:?} buf: {:?}", resp, buf);
                 if let Some(cap) = resp.cap {
-                    buf[1..].copy_from_slice(&[0xA; 9]);
-                    if let Err(err) = cap.send(&mut buf) {
-                        defmt::error!("syscall err: {:?}", err);
+                    match resp.inner {
+                        userspace::abi::RecvRespInner::Copy(len) => {
+                            buf[1..].copy_from_slice(&[0xA; 9]);
+                            if let Err(err) = cap.send(&mut buf) {
+                                defmt::error!("syscall err: {:?}", err);
+                            }
+                        }
+                        userspace::abi::RecvRespInner::Page { addr, len } => {
+                            let buf =
+                                unsafe { core::slice::from_raw_parts_mut(addr as *mut u8, len) };
+                            defmt::println!("addr : {:x}", addr);
+                            defmt::println!("got slice: {:?}", buf);
+                            buf[1..].copy_from_slice(&[0xA; 31]);
+                            defmt::println!("wrote");
+                            if let Err(err) = cap.send_page(buf) {
+                                defmt::error!("syscall err: {:?}", err);
+                            }
+                        }
                     }
                     if toggle {
                         led.set_low();

@@ -33,6 +33,7 @@ use syscalls::{
 use tcb::*;
 
 pub use builder::*;
+pub use regions::RegionAttr;
 #[cfg(test)]
 mod tests;
 
@@ -44,7 +45,7 @@ use cordyceps::{
 };
 use core::{ops::Range, pin::Pin};
 use heapless::Vec;
-use regions::{Region, RegionAttr, RegionTable};
+use regions::{Region, RegionTable};
 use scheduler::{Scheduler, ThreadTime};
 use space::Space;
 use task::*;
@@ -144,7 +145,7 @@ impl Kernel {
 
     /// Sends a message from the current thread to the specified endpoint
     /// This function takes a [`CapRef`] and expects it to be an [`Endpoint`]
-    pub(crate) fn send(&mut self, dest: CapRef, msg: Box<[u8]>) -> Result<(), KernelError> {
+    pub(crate) fn send(&mut self, dest: CapRef, msg: IPCMsgBody) -> Result<(), KernelError> {
         let endpoint = self.scheduler.current_thread_mut()?.endpoint(dest)?;
         self.send_inner(endpoint, msg, None)
     }
@@ -152,15 +153,15 @@ impl Kernel {
     fn send_inner(
         &mut self,
         endpoint: Endpoint,
-        body: Box<[u8]>,
+        body: IPCMsgBody,
         reply_endpoint: Option<Endpoint>,
     ) -> Result<(), KernelError> {
         let dest_tcb = self.scheduler.get_tcb_mut(endpoint.tcb_ref)?;
         let is_call = reply_endpoint.is_some();
         dest_tcb.req_queue.push_back(Box::pin(IPCMsg {
-            reply_endpoint,
-            body: IPCMsgBody::Buf(body),
             _links: Links::default(),
+            reply_endpoint,
+            body,
             addr: endpoint.addr,
         }));
 
@@ -198,7 +199,7 @@ impl Kernel {
     pub(crate) fn call(
         &mut self,
         dest: CapRef,
-        msg: Box<[u8]>,
+        msg: IPCMsgBody,
         mut recv_req: RecvReq<'static>,
     ) -> Result<ThreadRef, KernelError> {
         let src_ref = self.scheduler.current_thread.tcb_ref;
@@ -347,7 +348,7 @@ pub(crate) struct IPCMsg {
 
 enum IPCMsgBody {
     Buf(Box<[u8]>),
-    Page(TaskPtrMut<'static, [u8]>),
+    Page(&'static [u8]),
 }
 
 #[macro_export]

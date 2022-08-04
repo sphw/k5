@@ -3,6 +3,7 @@ use abi::{
     SyscallReturn, SyscallReturnType,
 };
 use core::fmt::Write;
+use core::mem;
 use core::{
     arch::asm,
     mem::MaybeUninit,
@@ -114,7 +115,7 @@ fn call_innner<T: ?Sized>(
     ty: SyscallDataType,
     capability: CapRef,
     r: &mut T,
-    out: &mut T,
+    out: Option<&mut T>,
 ) -> Result<RecvResp, Error> {
     let size = core::mem::size_of_val(r);
     let (ptr, _) = (r as *mut T).to_raw_parts();
@@ -123,9 +124,13 @@ fn call_innner<T: ?Sized>(
         .with(SyscallIndex::SYSCALL_ARG_TYPE, ty)
         .with(SyscallIndex::SYSCALL_FN, SyscallFn::Call);
     let mut resp: MaybeUninit<RecvResp> = MaybeUninit::uninit();
-    let out_size = core::mem::size_of_val(r);
-    let (ptr, _) = (out as *mut T).to_raw_parts();
-    let out_addr = ptr.addr();
+    let (out_size, out_addr) = if let Some(out) = out {
+        let (ptr, _) = (out as *mut T).to_raw_parts();
+        (core::mem::size_of_val(out), ptr.addr())
+    } else {
+        (0, 0)
+    };
+
     let mut args = SyscallArgs {
         arg1: addr,
         arg2: size,
@@ -170,8 +175,16 @@ pub(crate) fn log(data: &[u8]) -> Result<(), Error> {
 pub trait CapExt {
     /// Sends a request to the capability and waits for a reply
     fn call<T: ?Sized>(&self, request: &mut T, out_buf: &mut T) -> Result<RecvResp, Error>;
+
+    /// Sends a request to the capability loaning the data in the io buf and waits for a reply
+    fn call_io<T: ?Sized>(&self, io: &mut T) -> Result<(), Error>;
+
     /// Sends a request to the capability, and returns ASAP
     fn send<T: ?Sized>(&self, request: &mut T) -> Result<(), Error>;
+
+    /// Sends a request to the capability, and returns ASAP
+    fn send_page<T: ?Sized>(&self, request: &'static mut T) -> Result<(), Error>;
+
     /// Listens to the port on the specified capability
     fn listen(&self) -> Result<(), Error>;
     /// Connects to the port, and returns an endpoint one can second messages to
@@ -180,11 +193,33 @@ pub trait CapExt {
 
 impl CapExt for CapRef {
     fn call<T: ?Sized>(&self, r: &mut T, out_buf: &mut T) -> Result<RecvResp, Error> {
-        call_innner(SyscallDataType::Copy, *self, r, out_buf)
+        call_innner(SyscallDataType::Copy, *self, r, Some(out_buf))
+    }
+
+    fn call_io<T: ?Sized>(&self, io: &mut T) -> Result<(), Error> {
+        match call_innner(SyscallDataType::Page, *self, io, None)?.inner {
+            abi::RecvRespInner::Copy(_) => {
+                return Err(Error::ReturnTypeMismatch);
+            }
+            abi::RecvRespInner::Page { addr, len } => {
+                // Since we are taking a mutable borrow over just the course of the syscall, we must guarentee
+                // that we are getting back the same memory
+                let (ptr, _) = (io as *mut T).to_raw_parts();
+                if addr != ptr.addr() || mem::size_of_val(io) != len {
+                    defmt::error!("addr mismatch");
+                    return Err(Error::ReturnTypeMismatch);
+                }
+            }
+        }
+        Ok(())
     }
 
     fn send<T: ?Sized>(&self, r: &mut T) -> Result<(), Error> {
         send_inner(SyscallDataType::Copy, *self, r)
+    }
+
+    fn send_page<T: ?Sized>(&self, r: &'static mut T) -> Result<(), Error> {
+        send_inner(SyscallDataType::Page, *self, r)
     }
 
     fn listen(&self) -> Result<(), Error> {
@@ -246,7 +281,6 @@ pub fn recv<T: ?Sized>(mask: u32, r: &mut T) -> Result<abi::RecvResp, Error> {
             let code = res.get(SyscallReturn::SYSCALL_LEN);
             Err(abi::Error::from(code as u8))
         }
-        SyscallReturnType::Page => Err(abi::Error::ReturnTypeMismatch),
         _ => Ok(unsafe { resp.assume_init() }),
     }
 }

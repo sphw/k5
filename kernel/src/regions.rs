@@ -1,12 +1,13 @@
 use core::ops::Range;
 
+use defmt::Format;
 use enumflags2::{bitflags, BitFlags};
 
 use crate::KernelError;
 
 #[derive(Clone, Default)]
 pub struct RegionTable {
-    pub regions: heapless::Vec<Region, 16>,
+    pub regions: heapless::Vec<Region, 8>,
 }
 
 #[allow(dead_code)]
@@ -23,7 +24,13 @@ impl RegionTable {
                 return Ok(());
             }
             let mut old_end = None;
+
             if self.regions[i].range.contains(&region.range.start) {
+                if self.regions[i].range.contains(&region.range.end)
+                    && self.regions[i].attr.contains(region.attr)
+                {
+                    return Ok(());
+                }
                 inserted_at = Some(i);
                 old_end = Some(self.regions[i].range.end);
                 self.regions[i].range.end = region.range.start; // TODO: Handle case where region.start == new_region.start
