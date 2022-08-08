@@ -72,6 +72,7 @@ struct TaskTableEntry<'a> {
 #[derive(Debug, Deserialize)]
 enum Platform {
     RV32,
+    AwD1,
     ArmV8m,
 }
 
@@ -151,7 +152,7 @@ impl Config {
             .map(|(reloc, task)| {
                 let elf = &task.target_dir().join("size.elf");
                 task.link(reloc, elf, &full_size_loc, TASK_LINK_BYTES)?;
-                let sizes = get_elf_size(elf, &self.regions)?;
+                let sizes = get_elf_size(elf, &self.regions, task.stack_space_size)?;
                 let regions = sizes
                     .clone()
                     .into_iter()
@@ -198,7 +199,7 @@ impl Config {
                     entrypoint,
                     stack_space: stack_region.address..stack_region.address + task.stack_space_size,
                     init_stack_size: task.stack_size,
-                    regions: loc.regions.values().map(|r| r.address..r.address+r.size).collect(),
+                    regions: loc.regions.values().map(|r| { r.address..r.address+r.size}).collect(),
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -362,6 +363,7 @@ impl Task {
 fn get_elf_size(
     elf: &Path,
     regions: &HashMap<String, MemorySection>,
+    stack_space_size: usize,
 ) -> Result<HashMap<String, Range<usize>>> {
     let elf = fs::read(elf)?;
     let elf = if let Object::Elf(e) = Object::parse(&elf)? {
@@ -374,7 +376,7 @@ fn get_elf_size(
         for (name, region) in regions.iter() {
             if region.contains(start) {
                 let end = start + size;
-                let range = sizes.entry(name.clone()).or_insert(start..size);
+                let range = sizes.entry(name.clone()).or_insert(start..end);
                 range.start = range.start.min(start);
                 range.end = range.end.max(end);
                 return true;
@@ -390,6 +392,14 @@ fn get_elf_size(
             return Err(anyhow!("failed to remap relocated section"));
         }
     }
+    let (stack_name, _) = regions
+        .iter()
+        .find(|(_, r)| r.role == MemoryRole::Stack)
+        .ok_or_else(|| {
+            anyhow!("no stack region found. Make sure to specify a signle region for the stack")
+        })?;
+    let stack_range = sizes.get_mut(stack_name).unwrap();
+    stack_range.end = stack_range.end + stack_space_size;
     Ok(sizes)
 }
 
