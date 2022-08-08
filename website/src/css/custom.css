@@ -28,3 +28,52 @@
   --ifm-color-primary-lightest: #4fddbf;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
 }
+
+body {
+  font-family: Helvetica Neue;
+}
+
+.menu__link--active {
+  background-color: var(--ifm-color-primary) !important;
+  color: #fff;
+}
+
+.menu {
+  padding-top: -0.5rem;
+  padding-bottom: -0.5rem;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.menu__link {
+  border-radius: 0 !important;
+  padding-top: .6em;
+  padding-bottom: .6em;
+}
+
+.menu__link--active:hover {
+  color: #fff !important;
+}
+.menu__list-item-collapsible :hover {
+  color: var(--ifm-color-primary) !important;
+}
+
+
+.menu__list-item-collapsible .menu__link:hover, .menu__list-item-collapsible .menu__link--active {
+  color: var(--ifm-color-primary);
+}
+
+.breadcrumbs__link {
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.navbar {
+  box-shadow: none !important;
+  border-bottom: 2px solid var(--ifm-color-primary);
+}
+
+
+.card {
+  box-shadow: none !important;
+}
