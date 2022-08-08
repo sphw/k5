@@ -14,6 +14,7 @@ use cargo_metadata::Message;
 use color_eyre::{eyre::anyhow, Result};
 use goblin::{elf64::program_header::PT_LOAD, Object};
 use serde::Deserialize;
+use std::fmt::Write;
 use std::{
     collections::HashMap,
     fs,
@@ -27,17 +28,18 @@ use crate::flash;
 static TASK_RLINK_BYTES: &[u8] = include_bytes!("task-rlink.x");
 static TASK_LINK_BYTES: &[u8] = include_bytes!("task-link.x");
 static KERN_LINK_BYTES: &[u8] = include_bytes!("kern-link.x");
+static KERN_RV_LINK_BYTES: &[u8] = include_bytes!("kern-rv-link.x");
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub probe: flash::FlashConfig,
     pub tasks: Vec<Task>,
-    flash: MemorySection,
-    ram: MemorySection,
-    stack_size: Option<u32>,
-    stack_space_size: Option<u32>,
+    pub regions: HashMap<String, MemorySection>,
+    stack_size: Option<usize>,
+    stack_space_size: Option<usize>,
     kernel: Kernel,
+    platform: Platform,
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,23 +51,41 @@ pub struct Task {
     secure: bool,
     // TODO(sphw): this will be used to position secure tasks above the kernel
     #[serde(default)]
-    stack_size: u32,
+    stack_size: usize,
     #[serde(default)]
-    stack_space_size: u32,
+    stack_space_size: usize,
 }
 
 #[derive(Debug, Deserialize)]
 struct Kernel {
     crate_path: PathBuf,
     #[serde(default)]
-    stack_size: u32,
-    flash_size: u32,
-    ram_size: u32,
+    stack_size: usize,
+    sizes: HashMap<String, usize>,
 }
 
 struct TaskTableEntry<'a> {
     task: &'a Task,
     loc: TaskLoc,
+}
+
+#[derive(Debug, Deserialize)]
+enum Platform {
+    RV32,
+    ArmV8m,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub enum MemoryRole {
+    None,
+    Stack,
+}
+
+impl Default for MemoryRole {
+    fn default() -> Self {
+        MemoryRole::None
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,11 +136,14 @@ impl Config {
             .map(Task::build)
             .collect::<Result<Vec<_>, _>>()?;
         let full_size_loc = TaskLoc {
-            flash: self.flash.clone(),
-            ram: self.ram.clone(),
+            regions: self.regions.clone(),
         };
-        let mut current_flash_loc = self.flash.address + self.kernel.flash_size;
-        let mut current_ram_loc = self.ram.address + self.kernel.ram_size;
+
+        let mut current_locs: HashMap<String, MemorySection> = self.regions.clone();
+        for (name, size) in self.kernel.sizes.iter() {
+            let loc = &mut current_locs.get_mut(name).unwrap();
+            loc.address += size;
+        }
 
         let task_table = relocs
             .iter()
@@ -128,22 +151,28 @@ impl Config {
             .map(|(reloc, task)| {
                 let elf = &task.target_dir().join("size.elf");
                 task.link(reloc, elf, &full_size_loc, TASK_LINK_BYTES)?;
-                let size = get_elf_size(elf, &self.flash, &self.ram, task.stack_space_size)?;
+                let sizes = get_elf_size(elf, &self.regions)?;
+                let regions = sizes
+                    .clone()
+                    .into_iter()
+                    .map(|(name, range)| {
+                        (
+                            name.clone(),
+                            MemorySection {
+                                size: align_up(range.len(), 32),
+                                ..current_locs[&name]
+                            },
+                        )
+                    })
+                    .collect();
                 let entry = TaskTableEntry {
                     task,
-                    loc: TaskLoc {
-                        flash: MemorySection {
-                            address: current_flash_loc,
-                            size: size.flash,
-                        },
-                        ram: MemorySection {
-                            address: current_ram_loc,
-                            size: size.ram,
-                        },
-                    },
+                    loc: TaskLoc { regions },
                 };
-                current_flash_loc += size.flash;
-                current_ram_loc += size.ram;
+                for (name, size) in sizes.iter() {
+                    let loc = &mut current_locs.get_mut(name).unwrap();
+                    loc.address += align_up(size.len(), 32);
+                }
                 Ok(entry)
             })
             .collect::<Result<Vec<_>>>()?;
@@ -163,19 +192,17 @@ impl Config {
             .map(|(elf, entry)| {
                 let TaskTableEntry { task, loc } = entry;
                 let entrypoint = output.write(elf)?;
+                let stack_region = loc.regions.values().find(|r| r.role == MemoryRole::Stack).ok_or_else(|| anyhow!("no stack region found. Make sure to specify a signle region for the stack"))?;
                 Ok(codegen::Task {
                     name: task.name.clone(),
                     entrypoint,
-                    stack_space: loc.ram.address..loc.ram.address + task.stack_space_size,
+                    stack_space: stack_region.address..stack_region.address + task.stack_space_size,
                     init_stack_size: task.stack_size,
-                    ram_region: loc.ram.address..loc.ram.address + loc.ram.size,
-                    flash_region: loc.flash.address..loc.flash.address + loc.flash.size,
+                    regions: loc.regions.values().map(|r| r.address..r.address+r.size).collect(),
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let kernel = self
-            .kernel
-            .build(self.flash.address, self.ram.address, codegen_tasks)?;
+        let kernel = self.kernel.build(self.regions.clone(), codegen_tasks)?;
         output.write(&kernel)?;
 
         let out = output.finalize();
@@ -204,23 +231,18 @@ impl Config {
 }
 
 impl Kernel {
-    fn build(&self, flash: u32, ram: u32, tasks: Vec<codegen::Task>) -> Result<PathBuf> {
+    fn build(
+        &self,
+        regions: HashMap<String, MemorySection>,
+        tasks: Vec<codegen::Task>,
+    ) -> Result<PathBuf> {
         crate::print_header("Building kernel");
         let target_dir = self.crate_path.join("target");
         fs::create_dir_all(&target_dir)?;
-        let kern_loc = TaskLoc {
-            flash: MemorySection {
-                address: flash,
-                size: self.flash_size,
-            },
-            ram: MemorySection {
-                address: ram,
-                size: self.ram_size,
-            },
-        };
+        let kern_loc = TaskLoc { regions };
         fs::write(
             target_dir.join("memory.x"),
-            kern_loc.memory_linker_script(self.stack_size).as_bytes(),
+            kern_loc.memory_linker_script(self.stack_size)?.as_bytes(),
         )?;
         fs::write(target_dir.join("link.x"), KERN_LINK_BYTES)?;
         let task_list = codegen::TaskList { tasks };
@@ -314,7 +336,7 @@ impl Task {
         fs::write(
             target_dir.join("memory.x"),
             task_loc
-                .memory_linker_script(self.stack_space_size)
+                .memory_linker_script(self.stack_space_size)?
                 .as_bytes(),
         )?;
         fs::write(target_dir.join("link.x"), link_script)?;
@@ -339,87 +361,80 @@ impl Task {
 
 fn get_elf_size(
     elf: &Path,
-    flash: &MemorySection,
-    ram: &MemorySection,
-    stacksize: u32,
-) -> Result<TaskSize> {
+    regions: &HashMap<String, MemorySection>,
+) -> Result<HashMap<String, Range<usize>>> {
     let elf = fs::read(elf)?;
     let elf = if let Object::Elf(e) = Object::parse(&elf)? {
         e
     } else {
         return Err(anyhow!("object must be an elf"));
     };
-    let mut flash_range: Option<Range<u32>> = None;
-    let mut ram_range: Option<Range<u32>> = None;
-    fn expand_range(range: &mut Option<Range<u32>>, start: u32, size: u32) {
-        let range = range.get_or_insert(start..size);
-        let end = start + size;
-        range.start = range.start.min(start);
-        range.end = range.end.max(end);
-    }
+    let mut sizes = HashMap::new();
     let mut add_section = |start, size| {
-        if flash.contains(start) {
-            expand_range(&mut flash_range, start, size);
-            true
-        } else if ram.contains(start) {
-            expand_range(&mut ram_range, start, size);
-            true
-        } else {
-            false
+        for (name, region) in regions.iter() {
+            if region.contains(start) {
+                let end = start + size;
+                let range = sizes.entry(name.clone()).or_insert(start..size);
+                range.start = range.start.min(start);
+                range.end = range.end.max(end);
+                return true;
+            }
         }
+        false
     };
     for header in &elf.program_headers {
-        add_section(header.p_vaddr as u32, header.p_memsz as u32);
+        add_section(header.p_vaddr as usize, header.p_memsz as usize);
         if header.p_vaddr != header.p_paddr
-            && !add_section(header.p_paddr as u32, header.p_filesz as u32)
+            && !add_section(header.p_paddr as usize, header.p_filesz as usize)
         {
             return Err(anyhow!("failed to remap relocated section"));
         }
     }
-    let flash_range = flash_range.ok_or_else(|| anyhow!("failed to size flash for task"))?;
-    let ram_range = ram_range.unwrap_or_default();
-    Ok(TaskSize {
-        flash: align_up(flash_range.end - flash_range.start, 32),
-        ram: align_up((ram_range.end - ram_range.start) + stacksize, 32),
-    })
-}
-
-#[derive(Debug)]
-struct TaskSize {
-    flash: u32,
-    ram: u32,
+    Ok(sizes)
 }
 
 #[derive(Debug)]
 struct TaskLoc {
-    flash: MemorySection,
-    ram: MemorySection,
+    regions: HashMap<String, MemorySection>,
 }
 
 impl TaskLoc {
-    fn memory_linker_script(&self, stack_size: u32) -> String {
-        let ram_start = self.ram.address + stack_size;
-        let ram_size = self.ram.size - stack_size;
-        format!(
-            "MEMORY
-{{
-FLASH : ORIGIN = {:#010x} , LENGTH = {:#010x}
-STACK : ORIGIN = {:#010x}, LENGTH = {:#010x}
-RAM : ORIGIN = {:#010x}, LENGTH = {:#010x}
-}}",
-            self.flash.address, self.flash.size, self.ram.address, stack_size, ram_start, ram_size
-        )
+    fn memory_linker_script(&self, stack_size: usize) -> Result<String> {
+        let mut file = "MEMORY {\n".to_string();
+        for (name, section) in self.regions.iter() {
+            let mut section = section.clone();
+            if section.role == MemoryRole::Stack {
+                writeln!(
+                    &mut file,
+                    "STACK : ORIGIN = {:#010x}, LENGTH = {:#010x}",
+                    section.address, stack_size
+                )?;
+                section.address = section.address + stack_size;
+                section.size = section.size - stack_size;
+            }
+            writeln!(
+                &mut file,
+                "{} : ORIGIN = {:#010x}, LENGTH = {:#010x}",
+                name.to_uppercase(),
+                section.address,
+                section.size
+            )?;
+        }
+        file += "}";
+        Ok(file)
     }
 }
 
 #[derive(Debug, Deserialize, Clone)]
-struct MemorySection {
-    pub address: u32,
-    pub size: u32,
+pub struct MemorySection {
+    pub address: usize,
+    pub size: usize,
+    #[serde(default)]
+    pub role: MemoryRole,
 }
 
 impl MemorySection {
-    fn contains(&self, addr: u32) -> bool {
+    fn contains(&self, addr: usize) -> bool {
         addr >= self.address && addr <= (self.address + self.size)
     }
 }
@@ -430,7 +445,7 @@ pub struct SRecWriter {
 }
 
 impl SRecWriter {
-    fn write(&mut self, elf: &Path) -> Result<u32> {
+    fn write(&mut self, elf: &Path) -> Result<usize> {
         let image = fs::read(elf)?;
         let elf = if let Object::Elf(e) = Object::parse(&image)? {
             e
@@ -452,7 +467,7 @@ impl SRecWriter {
                 addr += chunk.len() as u32;
             }
         }
-        Ok(elf.header.e_entry as u32)
+        Ok(elf.header.e_entry as usize)
     }
 
     fn finalize(mut self) -> String {
@@ -472,7 +487,7 @@ impl SRecWriter {
 
 // source: https://docs.rs/x86_64/latest/x86_64/addr/fn.align_up.html
 #[inline]
-pub const fn align_up(addr: u32, align: u32) -> u32 {
+pub const fn align_up(addr: usize, align: usize) -> usize {
     assert!(align.is_power_of_two(), "`align` must be a power of two");
     let align_mask = align - 1;
     if addr & align_mask == 0 {

@@ -12,11 +12,10 @@ pub struct TaskList {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Task {
     pub name: String,
-    pub entrypoint: u32,
-    pub stack_space: Range<u32>,
-    pub init_stack_size: u32,
-    pub flash_region: Range<u32>,
-    pub ram_region: Range<u32>,
+    pub entrypoint: usize,
+    pub stack_space: Range<usize>,
+    pub init_stack_size: usize,
+    pub regions: Vec<Range<usize>>,
 }
 
 impl TaskList {
@@ -32,15 +31,9 @@ name: {:?},
 entrypoint: {},
 stack_space: {:?},
 init_stack_size: {},
-flash_region: {:?},
-ram_region: {:?},
+regions: &{:?}
 }},",
-                task.name,
-                task.entrypoint,
-                task.stack_space,
-                task.init_stack_size,
-                task.flash_region,
-                task.ram_region
+                task.name, task.entrypoint, task.stack_space, task.init_stack_size, task.regions,
             );
         }
         code += "];\n";

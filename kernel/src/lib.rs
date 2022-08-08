@@ -385,24 +385,20 @@ pub struct TaskDesc {
     pub entrypoint: usize,
     pub stack_space: Range<usize>,
     pub init_stack_size: usize,
-    pub flash_region: Range<usize>,
-    pub ram_region: Range<usize>,
+    pub regions: &'static [Range<usize>],
 }
 
 impl TaskDesc {
     fn region_table(&self) -> RegionTable {
         RegionTable {
-            regions: Vec::from_slice(&[
-                Region {
-                    range: self.flash_region.clone(),
+            regions: self
+                .regions
+                .iter()
+                .map(|range| Region {
+                    range: range.clone(),
                     attr: RegionAttr::Exec | RegionAttr::Write | RegionAttr::Read,
-                },
-                Region {
-                    range: self.ram_region.clone(),
-                    attr: RegionAttr::Exec | RegionAttr::Write | RegionAttr::Read,
-                },
-            ])
-            .unwrap(),
+                })
+                .collect(),
         }
     }
 }
