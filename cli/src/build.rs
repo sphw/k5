@@ -62,6 +62,7 @@ struct Kernel {
     #[serde(default)]
     stack_size: usize,
     sizes: HashMap<String, usize>,
+    linker_script: Option<PathBuf>,
 }
 
 struct TaskTableEntry<'a> {
@@ -69,11 +70,23 @@ struct TaskTableEntry<'a> {
     loc: TaskLoc,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Copy, Clone)]
 enum Platform {
     RV32,
     AwD1,
     ArmV8m,
+}
+
+impl Platform {
+    fn kern_link(&self) -> &'static [u8] {
+        match self {
+            Platform::RV32 => KERN_RV_LINK_BYTES,
+            Platform::AwD1 => {
+                todo!()
+            }
+            Platform::ArmV8m => KERN_LINK_BYTES,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Copy)]
@@ -203,7 +216,9 @@ impl Config {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-        let kernel = self.kernel.build(self.regions.clone(), codegen_tasks)?;
+        let kernel = self
+            .kernel
+            .build(self.platform, self.regions.clone(), codegen_tasks)?;
         output.write(&kernel)?;
 
         let out = output.finalize();
@@ -234,6 +249,7 @@ impl Config {
 impl Kernel {
     fn build(
         &self,
+        platform: Platform,
         regions: HashMap<String, MemorySection>,
         tasks: Vec<codegen::Task>,
     ) -> Result<PathBuf> {
@@ -245,7 +261,11 @@ impl Kernel {
             target_dir.join("memory.x"),
             kern_loc.memory_linker_script(self.stack_size)?.as_bytes(),
         )?;
-        fs::write(target_dir.join("link.x"), KERN_LINK_BYTES)?;
+        if let Some(kern_link_path) = &self.linker_script {
+            fs::copy(kern_link_path, target_dir.join("link.x"))?;
+        } else {
+            fs::write(target_dir.join("link.x"), platform.kern_link())?;
+        }
         let task_list = codegen::TaskList { tasks };
         let task_list_path = target_dir.join("task_list.json");
         fs::write(task_list_path.clone(), serde_json::to_vec(&task_list)?)?;
