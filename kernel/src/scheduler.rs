@@ -2,14 +2,12 @@ use super::KernelError;
 
 use crate::linked_impl;
 use crate::space::Space;
-use crate::task_ptr::TaskPtrMut;
-use crate::tcb::Tcb;
+use crate::tcb::{RecvReq, Tcb};
 use crate::{DomainEntry, ThreadState, TCB_CAPACITY};
-use abi::{RecvResp, ThreadRef};
+use abi::ThreadRef;
 use alloc::boxed::Box;
 use alloc::collections::BinaryHeap;
 use cordyceps::{list::Links, List};
-use core::mem::MaybeUninit;
 use core::pin::Pin;
 use defmt::Format;
 
@@ -34,17 +32,11 @@ impl Scheduler {
 
     pub(crate) fn wait(
         &mut self,
-        mask: usize,
-        out_buf: TaskPtrMut<'static, [u8]>,
-        recv_resp: TaskPtrMut<'static, MaybeUninit<RecvResp>>,
+        recv_req: RecvReq<'static>,
         loan: bool,
     ) -> Result<ThreadRef, KernelError> {
         let src = self.current_thread_mut()?;
-        src.state = ThreadState::Waiting {
-            addr: mask,
-            out_buf,
-            recv_resp,
-        };
+        src.state = ThreadState::Waiting { recv_req };
 
         let mut next_thread = self.next_thread(0).unwrap_or_else(DomainEntry::idle);
         if loan {

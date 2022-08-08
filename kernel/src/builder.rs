@@ -1,12 +1,12 @@
-use core::mem;
+use core::{mem, ops::Range};
 
 use abi::{Cap, Endpoint, Listen, PortId, ThreadRef};
 use alloc::boxed::Box;
 use cordyceps::List;
+use enumflags2::BitFlags;
 
 use crate::{
     regions::{Region, RegionAttr},
-    task::Loan,
     CapEntry, Kernel, KernelError, TaskDesc, TaskRef,
 };
 
@@ -53,7 +53,9 @@ impl KernelBuilder<'_> {
             .expect("invalid thread index");
         let entrypoint = task.entrypoint;
         for loan in thread.loans.into_iter() {
-            task.push_loan(loan.build()).expect("loan add failed");
+            task.region_table
+                .push(loan.build())
+                .expect("loan add failed");
         }
         self.kernel
             .spawn_thread(
@@ -188,6 +190,9 @@ impl ThreadBuilder {
 pub struct RegionBuilder(Region);
 
 impl RegionBuilder {
+    pub fn new(range: Range<usize>, attr: BitFlags<RegionAttr>) -> Self {
+        RegionBuilder(Region { range, attr })
+    }
     pub fn device<T>(ptr: *const T) -> Self {
         let len = mem::size_of::<T>();
         RegionBuilder(Region {
@@ -216,8 +221,8 @@ impl RegionBuilder {
         self
     }
 
-    fn build(self) -> Loan {
-        Loan { region: self.0 }
+    fn build(self) -> Region {
+        self.0
     }
 }
 

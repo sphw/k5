@@ -8,7 +8,7 @@ use alloc_cortex_m::CortexMHeap;
 use core::{mem::MaybeUninit, panic::PanicInfo};
 use cortex_m_rt::{entry, exception};
 use defmt::{error, info};
-use kernel::RegionBuilder;
+use kernel::{RegionAttr, RegionBuilder};
 use stm32l5::stm32l562;
 
 kernel::include_task_table! {}
@@ -41,12 +41,17 @@ fn main() -> ! {
             .priority(7)
             .budget(5)
             .cooldown(usize::MAX)
-            .loan_mem(RegionBuilder::device(stm32l562::RCC::PTR).write().read())
-            .loan_mem(RegionBuilder::device(stm32l562::GPIOA::PTR).write().read())
-            .loan_mem(RegionBuilder::device(stm32l562::GPIOD::PTR).write().read())
-            .loan_mem(RegionBuilder::device(stm32l562::GPIOG::PTR).write().read())
-            .loan_mem(RegionBuilder::device(stm32l562::PWR::PTR).write().read())
-            .loan_mem(RegionBuilder::device(stm32l562::FLASH::PTR).write().read())
+            .loan_mem(
+                RegionBuilder::new(0x4000_1000..0x4202fc00, RegionAttr::Device.into())
+                    .write()
+                    .read(),
+            )
+            //.loan_mem(RegionBuilder::device(stm32l562::RCC::PTR).write().read())
+            //.loan_mem(RegionBuilder::device(stm32l562::GPIOA::PTR).write().read())
+            // .loan_mem(RegionBuilder::device(stm32l562::GPIOD::PTR).write().read())
+            // .loan_mem(RegionBuilder::device(stm32l562::GPIOG::PTR).write().read())
+            //.loan_mem(RegionBuilder::device(stm32l562::PWR::PTR).write().read())
+            //.loan_mem(RegionBuilder::device(stm32l562::FLASH::PTR).write().read())
             .listen(*b"0123456789abcdef"),
     );
 

@@ -140,7 +140,7 @@ impl FromBits<u64> for SyscallReturnType {
     }
 }
 
-#[derive(Debug, Format)]
+#[derive(Debug, Format, Copy, Clone)]
 #[repr(u8)]
 pub enum Error {
     ReturnTypeMismatch,
@@ -233,5 +233,5 @@ pub struct RecvResp {
 #[repr(C)]
 pub enum RecvRespInner {
     Copy(usize),
-    Page(*const ()),
+    Page { addr: usize, len: usize },
 }

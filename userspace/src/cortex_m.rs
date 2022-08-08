@@ -1,13 +1,15 @@
 use abi::{
-    CapListEntry, CapRef, Error, RecvResp, SyscallArgs, SyscallDataType, SyscallFn, SyscallIndex,
+    CapListEntry, CapRef, Error, SyscallArgs, SyscallDataType, SyscallFn, SyscallIndex,
     SyscallReturn, SyscallReturnType,
 };
 use core::fmt::Write;
+use core::mem;
 use core::{
     arch::asm,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
 };
+use defmt::Format;
 
 #[doc(hidden)]
 #[no_mangle]
@@ -114,18 +116,22 @@ fn call_innner<T: ?Sized>(
     ty: SyscallDataType,
     capability: CapRef,
     r: &mut T,
-    out: &mut T,
-) -> Result<RecvResp, Error> {
+    out: Option<&mut T>,
+) -> Result<abi::RecvResp, Error> {
     let size = core::mem::size_of_val(r);
     let (ptr, _) = (r as *mut T).to_raw_parts();
     let addr = ptr.addr();
     let index = SyscallIndex::new()
         .with(SyscallIndex::SYSCALL_ARG_TYPE, ty)
         .with(SyscallIndex::SYSCALL_FN, SyscallFn::Call);
-    let mut resp: MaybeUninit<RecvResp> = MaybeUninit::uninit();
-    let out_size = core::mem::size_of_val(r);
-    let (ptr, _) = (out as *mut T).to_raw_parts();
-    let out_addr = ptr.addr();
+    let mut resp: MaybeUninit<abi::RecvResp> = MaybeUninit::uninit();
+    let (out_size, out_addr) = if let Some(out) = out {
+        let (ptr, _) = (out as *mut T).to_raw_parts();
+        (core::mem::size_of_val(out), ptr.addr())
+    } else {
+        (0, 0)
+    };
+
     let mut args = SyscallArgs {
         arg1: addr,
         arg2: size,
@@ -169,9 +175,17 @@ pub(crate) fn log(data: &[u8]) -> Result<(), Error> {
 
 pub trait CapExt {
     /// Sends a request to the capability and waits for a reply
-    fn call<T: ?Sized>(&self, request: &mut T, out_buf: &mut T) -> Result<RecvResp, Error>;
+    fn call<T: ?Sized>(&self, request: &mut T, out_buf: &mut T) -> Result<RecvResp<T>, Error>;
+
+    /// Sends a request to the capability loaning the data in the io buf and waits for a reply
+    fn call_io<'a, A: Aligned + 'a>(&self, io: &'a mut A) -> Result<(), Error>;
+
     /// Sends a request to the capability, and returns ASAP
     fn send<T: ?Sized>(&self, request: &mut T) -> Result<(), Error>;
+
+    /// Sends a request to the capability, and returns ASAP
+    fn send_page<A: Aligned + 'static>(&self, request: A) -> Result<(), Error>;
+
     /// Listens to the port on the specified capability
     fn listen(&self) -> Result<(), Error>;
     /// Connects to the port, and returns an endpoint one can second messages to
@@ -179,12 +193,42 @@ pub trait CapExt {
 }
 
 impl CapExt for CapRef {
-    fn call<T: ?Sized>(&self, r: &mut T, out_buf: &mut T) -> Result<RecvResp, Error> {
-        call_innner(SyscallDataType::Copy, *self, r, out_buf)
+    fn call<T: ?Sized>(&self, r: &mut T, out_buf: &mut T) -> Result<RecvResp<T>, Error> {
+        let resp = call_innner(SyscallDataType::Copy, *self, r, Some(out_buf))?;
+        if let abi::RecvRespInner::Copy(len) = resp.inner {
+            Ok(RecvResp {
+                cap: resp.cap,
+                body: RecvRespBody::Copy(len),
+            })
+        } else {
+            Err(Error::ReturnTypeMismatch)
+        }
+    }
+
+    fn call_io<'a, A: Aligned + 'a>(&self, io: &'a mut A) -> Result<(), Error> {
+        match call_innner(SyscallDataType::Page, *self, io, None)?.inner {
+            abi::RecvRespInner::Copy(_) => {
+                return Err(Error::ReturnTypeMismatch);
+            }
+            abi::RecvRespInner::Page { addr, len } => {
+                // Since we are taking a mutable borrow over just the course of the syscall, we must guarentee
+                // that we are getting back the same memory
+                let (ptr, _) = (io.deref_mut() as *mut A::Target).to_raw_parts();
+                if addr != ptr.addr() || mem::size_of_val(io.deref_mut()) != len {
+                    defmt::error!("addr mismatch");
+                    return Err(Error::ReturnTypeMismatch);
+                }
+            }
+        }
+        Ok(())
     }
 
     fn send<T: ?Sized>(&self, r: &mut T) -> Result<(), Error> {
         send_inner(SyscallDataType::Copy, *self, r)
+    }
+
+    fn send_page<A: Aligned + 'static>(&self, mut request: A) -> Result<(), Error> {
+        send_inner::<A::Target>(SyscallDataType::Page, *self, request.deref_mut())
     }
 
     fn listen(&self) -> Result<(), Error> {
@@ -226,13 +270,13 @@ impl CapExt for CapRef {
 ///
 /// This function will block until until another thread sends a request to
 /// the current thread
-pub fn recv<T: ?Sized>(mask: u32, r: &mut T) -> Result<abi::RecvResp, Error> {
+pub fn recv<T: ?Sized, R: Sized>(mask: u32, r: &mut T) -> Result<RecvResp<R>, Error> {
     let size = core::mem::size_of_val(r);
     let (ptr, _) = (r as *mut T).to_raw_parts();
     let index = SyscallIndex::new()
         .with(SyscallIndex::SYSCALL_ARG_TYPE, SyscallDataType::Copy)
         .with(SyscallIndex::SYSCALL_FN, SyscallFn::Recv);
-    let mut resp: MaybeUninit<RecvResp> = MaybeUninit::uninit();
+    let mut resp: MaybeUninit<abi::RecvResp> = MaybeUninit::uninit();
     let mut args = SyscallArgs {
         arg1: ptr.addr(),
         arg2: size,
@@ -246,31 +290,34 @@ pub fn recv<T: ?Sized>(mask: u32, r: &mut T) -> Result<abi::RecvResp, Error> {
             let code = res.get(SyscallReturn::SYSCALL_LEN);
             Err(abi::Error::from(code as u8))
         }
-        SyscallReturnType::Page => Err(abi::Error::ReturnTypeMismatch),
-        _ => Ok(unsafe { resp.assume_init() }),
+        _ => {
+            let resp = unsafe { resp.assume_init() };
+            Ok(RecvResp {
+                cap: resp.cap,
+                body: match resp.inner {
+                    abi::RecvRespInner::Copy(len) => RecvRespBody::Copy(len),
+                    abi::RecvRespInner::Page { addr, len } => {
+                        if len != mem::size_of::<R>() {
+                            return Err(Error::ReturnTypeMismatch);
+                        }
+                        RecvRespBody::Page(PageRefMut(unsafe { core::mem::transmute(addr) }))
+                    }
+                },
+            })
+        }
     }
 }
 
-pub struct LoanedPage<T: ?Sized> {
-    ptr: *mut T,
+#[derive(Format)]
+pub struct RecvResp<T: ?Sized + 'static> {
+    pub cap: Option<CapRef>,
+    pub body: RecvRespBody<T>,
 }
 
-impl<T> Deref for LoanedPage<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        // Safety: the kernel guarentees that no other thread will touch this memory,
-        // so we can safely borrow it
-        unsafe { &*self.ptr }
-    }
-}
-
-impl<T> DerefMut for LoanedPage<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        // Safety: the kernel guarentees that no other thread will touch this memory,
-        // so we can safely borrow it
-        unsafe { &mut *self.ptr }
-    }
+#[derive(Format)]
+pub enum RecvRespBody<T: ?Sized + 'static> {
+    Copy(usize),
+    Page(PageRefMut<'static, T>),
 }
 
 /// Retrieves the tasks current capabilities
@@ -380,3 +427,42 @@ impl Write for LenWrite {
         Ok(())
     }
 }
+
+#[derive(defmt::Format)]
+#[repr(C, align(32))]
+pub struct Page<T: ?Sized>(pub T);
+
+impl<T> Deref for Page<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for Page<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Format)]
+pub struct PageRefMut<'a, T: ?Sized + 'a>(&'a mut T);
+impl<T> Deref for PageRefMut<'static, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for PageRefMut<'static, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+pub trait Aligned: Deref + DerefMut {}
+
+impl<T> Aligned for Page<T> {}
+impl<T> Aligned for PageRefMut<'static, T> {}

@@ -383,7 +383,7 @@ pub(crate) fn translate_mut_task_ptr<'a, T: ptr::Pointee + ?Sized>(
 }
 
 fn validate_addr(addr: usize, len: usize, regions: &[Region]) -> bool {
-    let end = addr + len;
+    let end = addr + len - 1;
     regions.iter().any(|r| {
         r.range.contains(&addr) && r.range.contains(&end) && r.attr.contains(RegionAttr::Read)
     })
@@ -406,6 +406,9 @@ fn apply_region_table(table: &RegionTable) {
 
     for (i, region) in table.regions.iter().enumerate() {
         apply_region(i, region, mpu);
+    }
+    for i in table.regions.len()..8 {
+        clear_region(i, mpu);
     }
 
     // Safety: this is all "safe", its just marked as unsafe because cortex_m's registers
@@ -483,6 +486,13 @@ fn apply_region(i: usize, region: &Region, mpu: &cortex_m::peripheral::mpu::Regi
         mpu.rbar.write(rbar);
         mpu.rlar.write(rlar);
     }
+}
+
+fn clear_region(i: usize, mpu: &cortex_m::peripheral::mpu::RegisterBlock) {
+    // Safety: writes the region num, no impact on memory safety
+    unsafe { mpu.rnr.write(i as u32) };
+    // Safety: clears the particular region, no impact on memory safety
+    unsafe { mpu.rlar.write(0) };
 }
 
 // RTT
