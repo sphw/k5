@@ -9,6 +9,7 @@ use colored::Colorize;
 mod build;
 mod elf;
 mod flash;
+mod image;
 mod logs;
 
 fn main() -> color_eyre::Result<()> {

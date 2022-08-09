@@ -24,11 +24,13 @@ use std::{
 };
 
 use crate::flash;
+use crate::image::ImageBuilder;
+use crate::image::SRecImageBuilder;
 
-static TASK_RLINK_BYTES: &[u8] = include_bytes!("task-rlink.x");
-static TASK_LINK_BYTES: &[u8] = include_bytes!("task-link.x");
-static KERN_LINK_BYTES: &[u8] = include_bytes!("kern-link.x");
-static KERN_RV_LINK_BYTES: &[u8] = include_bytes!("kern-rv-link.x");
+pub static TASK_RLINK_BYTES: &[u8] = include_bytes!("task-rlink.x");
+pub static TASK_LINK_BYTES: &[u8] = include_bytes!("task-link.x");
+pub static KERN_LINK_BYTES: &[u8] = include_bytes!("kern-link.x");
+pub static KERN_RV_LINK_BYTES: &[u8] = include_bytes!("kern-rv-link.x");
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -46,32 +48,27 @@ pub struct Config {
 pub struct Task {
     pub name: String,
     #[serde(flatten)]
-    source: TaskSource,
+    pub source: TaskSource,
     #[allow(dead_code)]
-    secure: bool,
+    pub secure: bool,
     // TODO(sphw): this will be used to position secure tasks above the kernel
     #[serde(default)]
-    stack_size: usize,
+    pub stack_size: usize,
     #[serde(default)]
-    stack_space_size: usize,
+    pub stack_space_size: usize,
 }
 
 #[derive(Debug, Deserialize)]
-struct Kernel {
+pub(crate) struct Kernel {
     crate_path: PathBuf,
     #[serde(default)]
     stack_size: usize,
-    sizes: HashMap<String, usize>,
+    pub(crate) sizes: HashMap<String, usize>,
     linker_script: Option<PathBuf>,
 }
 
-struct TaskTableEntry<'a> {
-    task: &'a Task,
-    loc: TaskLoc,
-}
-
 #[derive(Debug, Deserialize, Copy, Clone)]
-enum Platform {
+pub enum Platform {
     RV32,
     AwD1,
     ArmV8m,
@@ -104,7 +101,7 @@ impl Default for MemoryRole {
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-enum TaskSource {
+pub enum TaskSource {
     Crate { crate_path: PathBuf },
 }
 
@@ -113,6 +110,11 @@ impl Config {
         if self.kernel.crate_path.is_relative() {
             self.kernel.crate_path =
                 fs::canonicalize(app_path.join(self.kernel.crate_path.clone()))?;
+        }
+        if let Some(linker_path) = &mut self.kernel.linker_script {
+            if linker_path.is_relative() {
+                *linker_path = fs::canonicalize(app_path.join(linker_path.clone()))?;
+            }
         }
 
         for task in &mut self.tasks {
@@ -144,110 +146,19 @@ impl Config {
             return Err(anyhow!("missing idle task"));
         }
 
-        let relocs = self
-            .tasks
-            .iter()
-            .map(Task::build)
-            .collect::<Result<Vec<_>, _>>()?;
-        let full_size_loc = TaskLoc {
-            regions: self.regions.clone(),
-        };
-
-        let mut current_locs: HashMap<String, MemorySection> = self.regions.clone();
-        for (name, size) in self.kernel.sizes.iter() {
-            let loc = &mut current_locs.get_mut(name).unwrap();
-            loc.address += size;
+        let target_path = self.kernel.crate_path.join("target");
+        let mut srec_builder = SRecImageBuilder::new(self.regions.clone(), self.platform);
+        for task in &self.tasks {
+            srec_builder.task(task)?;
         }
+        srec_builder.kernel(&self.kernel)?;
 
-        let task_table = relocs
-            .iter()
-            .zip(self.tasks.iter())
-            .map(|(reloc, task)| {
-                let elf = &task.target_dir().join("size.elf");
-                task.link(reloc, elf, &full_size_loc, TASK_LINK_BYTES)?;
-                let sizes = get_elf_size(elf, &self.regions, task.stack_space_size)?;
-                let regions = sizes
-                    .clone()
-                    .into_iter()
-                    .map(|(name, range)| {
-                        (
-                            name.clone(),
-                            MemorySection {
-                                size: align_up(range.len(), 32),
-                                ..current_locs[&name]
-                            },
-                        )
-                    })
-                    .collect();
-                let entry = TaskTableEntry {
-                    task,
-                    loc: TaskLoc { regions },
-                };
-                for (name, size) in sizes.iter() {
-                    let loc = &mut current_locs.get_mut(name).unwrap();
-                    loc.address += align_up(size.len(), 32);
-                }
-                Ok(entry)
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let final_tasks = relocs
-            .iter()
-            .zip(task_table.iter())
-            .map(|(reloc, entry)| {
-                let elf = entry.task.target_dir().join("final.elf");
-                entry.task.link(reloc, &elf, &entry.loc, TASK_LINK_BYTES)?;
-                Ok(elf)
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let mut output = SRecWriter::default();
-        let codegen_tasks = final_tasks
-            .iter()
-            .zip(task_table.iter())
-            .map(|(elf, entry)| {
-                let TaskTableEntry { task, loc } = entry;
-                let entrypoint = output.write(elf)?;
-                let stack_region = loc.regions.values().find(|r| r.role == MemoryRole::Stack).ok_or_else(|| anyhow!("no stack region found. Make sure to specify a signle region for the stack"))?;
-                Ok(codegen::Task {
-                    name: task.name.clone(),
-                    entrypoint,
-                    stack_space: stack_region.address..stack_region.address + task.stack_space_size,
-                    init_stack_size: task.stack_size,
-                    regions: loc.regions.values().map(|r| { r.address..r.address+r.size}).collect(),
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let kernel = self
-            .kernel
-            .build(self.platform, self.regions.clone(), codegen_tasks)?;
-        output.write(&kernel)?;
-
-        let out = output.finalize();
-        let out_path = self.kernel.crate_path.join("target").join("final.srec");
-        fs::write(&out_path, &out)?;
-        let ihex_path = self.kernel.crate_path.join("target").join("final.ihex");
-        let output = Command::new("arm-none-eabi-objcopy")
-            .arg("-Isrec")
-            .arg(out_path)
-            .arg(ihex_path)
-            .arg("-Oihex")
-            .output()?;
-        if !output.status.success() {
-            return Err(anyhow!(
-                "objcopy failed: {:?}",
-                std::str::from_utf8(&output.stderr)
-            ));
-        }
-        fs::copy(
-            &kernel,
-            self.kernel.crate_path.join("target").join("kernel.elf"),
-        )?;
-
-        Ok(self.kernel.crate_path.join("target"))
+        Ok(target_path)
     }
 }
 
 impl Kernel {
-    fn build(
+    pub(crate) fn build(
         &self,
         platform: Platform,
         regions: HashMap<String, MemorySection>,
@@ -262,6 +173,7 @@ impl Kernel {
             kern_loc.memory_linker_script(self.stack_size)?.as_bytes(),
         )?;
         if let Some(kern_link_path) = &self.linker_script {
+            println!("copying {:?} {:?}", kern_link_path, self.linker_script);
             fs::copy(kern_link_path, target_dir.join("link.x"))?;
         } else {
             fs::write(target_dir.join("link.x"), platform.kern_link())?;
@@ -336,7 +248,7 @@ impl Task {
         crate_path.join("target")
     }
 
-    fn build(&self) -> Result<PathBuf> {
+    pub fn build(&self) -> Result<PathBuf> {
         crate::print_header(format!("Building {}", self.name));
         let TaskSource::Crate { crate_path } = &self.source;
 
@@ -346,7 +258,7 @@ impl Task {
         build_crate(crate_path, true, None)
     }
 
-    fn link(
+    pub fn link(
         &self,
         reloc_elf: &Path,
         dest: &Path,
@@ -380,7 +292,7 @@ impl Task {
     }
 }
 
-fn get_elf_size(
+pub(crate) fn get_elf_size(
     elf: &Path,
     regions: &HashMap<String, MemorySection>,
     stack_space_size: usize,
@@ -424,8 +336,8 @@ fn get_elf_size(
 }
 
 #[derive(Debug)]
-struct TaskLoc {
-    regions: HashMap<String, MemorySection>,
+pub struct TaskLoc {
+    pub(crate) regions: HashMap<String, MemorySection>,
 }
 
 impl TaskLoc {
@@ -475,7 +387,7 @@ pub struct SRecWriter {
 }
 
 impl SRecWriter {
-    fn write(&mut self, elf: &Path) -> Result<usize> {
+    pub(crate) fn write(&mut self, elf: &Path) -> Result<usize> {
         let image = fs::read(elf)?;
         let elf = if let Object::Elf(e) = Object::parse(&image)? {
             e
@@ -488,6 +400,7 @@ impl SRecWriter {
             }
             let data =
                 &image[header.p_offset as usize..(header.p_offset + header.p_filesz) as usize];
+            println!("writing {:?}", header.p_paddr);
             let mut addr = header.p_paddr as u32;
             for chunk in data.chunks(250) {
                 self.buf.push(srec::Record::S3(srec::Data {
@@ -500,7 +413,7 @@ impl SRecWriter {
         Ok(elf.header.e_entry as usize)
     }
 
-    fn finalize(mut self) -> String {
+    pub(crate) fn finalize(mut self) -> String {
         let sec_count = self.buf.len();
         if sec_count < 0x1_00_00 {
             self.buf
