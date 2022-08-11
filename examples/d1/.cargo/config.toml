@@ -1,0 +1,13 @@
+[build]
+target = "riscv64imac-unknown-none-elf"
+
+[target.riscv64imac-unknown-none-elf]
+rustflags = [
+    #"-C", "link-arg=-Tlink.ld",
+    # "-C", "relocation-model=pic",
+]
+
+
+[profile.dev]
+#opt-level = "z"
+#lto = true

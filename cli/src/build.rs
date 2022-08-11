@@ -148,11 +148,11 @@ impl Config {
 
         let target_path = self.kernel.crate_path.join("target");
         let mut builder: Box<dyn ImageBuilder<Image = SRecImage>> = match self.platform {
-            Platform::AwD1 => Box::new(D1ImageBuilder::new(
-                self.regions.clone(),
-                self.platform,
-                &self.kernel,
-            )?),
+            // Platform::AwD1 => Box::new(D1ImageBuilder::new(
+            //     self.regions.clone(),
+            //     self.platform,
+            //     &self.kernel,
+            // )?),
             _ => Box::new(SRecImageBuilder::new(
                 self.regions.clone(),
                 self.platform,
@@ -357,7 +357,7 @@ impl TaskLoc {
         let mut file = "MEMORY {\n".to_string();
         for (name, section) in self.regions.iter() {
             let mut section = section.clone();
-            if section.role == MemoryRole::Stack {
+            if stack_size != 0 && section.role == MemoryRole::Stack {
                 writeln!(
                     &mut file,
                     "STACK : ORIGIN = {:#010x}, LENGTH = {:#010x}",
@@ -412,7 +412,6 @@ impl SRecWriter {
             }
             let data =
                 &image[header.p_offset as usize..(header.p_offset + header.p_filesz) as usize];
-            println!("writing {:?} {:?}", header.p_paddr, data.len());
             let mut addr = header.p_paddr as u32;
             for chunk in data.chunks(250) {
                 self.buf.push(srec::Record::S3(srec::Data {
