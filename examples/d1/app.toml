@@ -1,6 +1,9 @@
 stack_space_size = 0x2000
 stack_size = 0x1000
 platform = "AwD1"
+flash_tool = "xfel"	
+flash = "SpiNor"
+base_addr = 0x30000
 
 [regions]
 flash = { address = 0x40020000, size = 0x80000, role = "stack" }

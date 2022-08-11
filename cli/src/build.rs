@@ -34,13 +34,13 @@ pub static KERN_RV_LINK_BYTES: &[u8] = include_bytes!("kern-rv-link.x");
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    #[serde(default)]
+    #[serde(flatten)]
     pub probe: flash::FlashConfig,
     pub tasks: Vec<Task>,
     pub regions: HashMap<String, MemorySection>,
     stack_size: Option<usize>,
     stack_space_size: Option<usize>,
-    kernel: Kernel,
+    pub kernel: Kernel,
     platform: Platform,
 }
 
@@ -59,7 +59,7 @@ pub struct Task {
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct Kernel {
+pub struct Kernel {
     pub crate_path: PathBuf,
     #[serde(default)]
     stack_size: usize,

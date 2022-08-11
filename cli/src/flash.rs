@@ -8,14 +8,30 @@ use color_eyre::Result;
 use kdam::{tqdm, Column, RichProgress};
 use probe_rs::{
     flashing::{DownloadOptions, FlashProgress, ProgressEvent},
-    DebugProbeSelector, Session, WireProtocol,
+    DebugProbeSelector, Session as ProbeSession, WireProtocol,
 };
 use probe_rs_cli_util::common_options::ProbeOptions;
 use serde::Deserialize;
 
+use crate::{
+    build::Config,
+    xfel::{self, XfelDevice},
+};
+
+#[derive(Deserialize, Debug, Clone)]
+#[serde(tag = "flash_tool")]
+#[serde(rename_all = "lowercase")]
+pub enum FlashConfig {
+    Xfel {
+        flash: xfel::InternalFlash,
+        base_addr: usize,
+    },
+    Probe(#[serde(default)] ProbeConfig),
+}
+
 // copy and pasted from probe-rs-cli-util, so we can derive serde
 #[derive(Deserialize, clap::Parser, Debug, Default, Clone)]
-pub struct FlashConfig {
+pub struct ProbeConfig {
     #[structopt(long)]
     #[serde(default)]
     pub chip: Option<String>,
@@ -58,8 +74,19 @@ pub struct FlashConfig {
     pub allow_erase_all: bool,
 }
 
-impl FlashConfig {
-    pub(crate) fn merge(&mut self, other: FlashConfig) {
+// impl FlashConfig {
+//     pub(crate) fn merge(&mut self, other: FlashConfig) {
+//         match (self, other) {
+//             (_, other) => {
+//                 *self = other;
+//             }
+//             (FlashConfig::Probe(l), FlashConfig::Probe(r)) => l.merge(r),
+//         }
+//     }
+// }
+
+impl ProbeConfig {
+    pub(crate) fn merge(&mut self, other: ProbeConfig) {
         if let Some(chip) = other.chip {
             self.chip = Some(chip)
         }
@@ -84,8 +111,8 @@ impl FlashConfig {
     }
 }
 
-impl From<FlashConfig> for ProbeOptions {
-    fn from(val: FlashConfig) -> Self {
+impl From<ProbeConfig> for ProbeOptions {
+    fn from(val: ProbeConfig) -> Self {
         ProbeOptions {
             chip: val.chip,
             chip_description_path: val.chip_description_path,
@@ -99,70 +126,96 @@ impl From<FlashConfig> for ProbeOptions {
     }
 }
 
-pub fn flash(config: FlashConfig, ihex: PathBuf) -> Result<Session> {
-    crate::print_header("Flashing");
-    let config: ProbeOptions = config.into();
-    let mut session = config.simple_attach()?;
-    let mut bin = fs::File::open(ihex)?;
-    let mut loader = session.target().flash_loader();
-    loader.load_hex_data(&mut bin)?;
-    let mut download_option = DownloadOptions::default();
-    //download_option.keep_unwritten_bytes = config.restore_unwritten;
-    download_option.dry_run = config.dry_run;
-    download_option.do_chip_erase = true;
-    // download_option.disable_double_buffering = config.disable_double_buffering;
+pub fn flash(config: &Config) -> Result<Session> {
+    let target = config.kernel.crate_path.join("target");
+    match &config.probe {
+        FlashConfig::Xfel { flash, base_addr } => {
+            let device = XfelDevice::connect(*flash)?;
+            let bin = target.join("final.bin");
+            device.write_flash(*base_addr, &bin)?;
+            Ok(Session::Xfel(device))
+        }
+        FlashConfig::Probe(probe) => {
+            let probe = probe.clone();
+            let ihex = target.join("final.ihex");
+            probe.flash(ihex).map(Session::Probe)
+        }
+    }
+}
 
-    let pb = Arc::new(Mutex::new(RichProgress::new(
-        tqdm!(),
-        vec![
-            Column::Bar,
-            Column::Percentage(1),
-            Column::Text("•".to_string(), None),
-            Column::CountTotal,
-            Column::Text("•".to_string(), None),
-            Column::RemainingTime,
-        ],
-    )));
-    kdam::term::init();
-    let total_sector_size = Arc::new(Mutex::new(0));
-    let total_page_size = Arc::new(Mutex::new(0));
-    let total_fill_size = Arc::new(Mutex::new(0));
-    let progress = FlashProgress::new(move |event| match event {
-        ProgressEvent::Initialized { flash_layout } => {
-            *total_page_size.lock().unwrap() = flash_layout.pages().iter().map(|s| s.size()).sum();
-            *total_sector_size.lock().unwrap() =
-                flash_layout.sectors().iter().map(|s| s.size()).sum();
-            *total_fill_size.lock().unwrap() = flash_layout.fills().iter().map(|s| s.size()).sum();
-        }
-        ProgressEvent::StartedFilling => {
-            let mut pb = pb.lock().unwrap();
-            pb.reset(Some(*total_fill_size.lock().unwrap() as usize))
-        }
-        ProgressEvent::StartedErasing => {
-            let mut pb = pb.lock().unwrap();
-            pb.reset(Some(*total_sector_size.lock().unwrap() as usize))
-        }
-        ProgressEvent::StartedProgramming => {
-            let mut pb = pb.lock().unwrap();
-            pb.reset(Some(*total_page_size.lock().unwrap() as usize))
-        }
+pub enum Session {
+    Xfel(XfelDevice),
+    Probe(ProbeSession),
+}
 
-        ProgressEvent::PageFilled { size, .. } => {
-            let mut pb = pb.lock().unwrap();
-            pb.update(size as usize);
-        }
-        ProgressEvent::SectorErased { size, .. } => {
-            let mut pb = pb.lock().unwrap();
-            pb.update(size as usize);
-        }
-        ProgressEvent::PageProgrammed { size, .. } => {
-            let mut pb = pb.lock().unwrap();
-            pb.update(size as usize);
-        }
-        _ => {}
-    });
-    download_option.progress = Some(&progress);
-    loader.commit(&mut session, download_option)?;
+impl ProbeConfig {
+    pub fn flash(self, ihex: PathBuf) -> Result<ProbeSession> {
+        crate::print_header("Flashing");
+        let config: ProbeOptions = self.into();
+        let mut session = config.simple_attach()?;
+        let mut bin = fs::File::open(ihex)?;
+        let mut loader = session.target().flash_loader();
+        loader.load_hex_data(&mut bin)?;
+        let mut download_option = DownloadOptions::default();
+        //download_option.keep_unwritten_bytes = config.restore_unwritten;
+        download_option.dry_run = config.dry_run;
+        download_option.do_chip_erase = true;
+        // download_option.disable_double_buffering = config.disable_double_buffering;
 
-    Ok(session)
+        let pb = Arc::new(Mutex::new(RichProgress::new(
+            tqdm!(),
+            vec![
+                Column::Bar,
+                Column::Percentage(1),
+                Column::Text("•".to_string(), None),
+                Column::CountTotal,
+                Column::Text("•".to_string(), None),
+                Column::RemainingTime,
+            ],
+        )));
+        kdam::term::init();
+        let total_sector_size = Arc::new(Mutex::new(0));
+        let total_page_size = Arc::new(Mutex::new(0));
+        let total_fill_size = Arc::new(Mutex::new(0));
+        let progress = FlashProgress::new(move |event| match event {
+            ProgressEvent::Initialized { flash_layout } => {
+                *total_page_size.lock().unwrap() =
+                    flash_layout.pages().iter().map(|s| s.size()).sum();
+                *total_sector_size.lock().unwrap() =
+                    flash_layout.sectors().iter().map(|s| s.size()).sum();
+                *total_fill_size.lock().unwrap() =
+                    flash_layout.fills().iter().map(|s| s.size()).sum();
+            }
+            ProgressEvent::StartedFilling => {
+                let mut pb = pb.lock().unwrap();
+                pb.reset(Some(*total_fill_size.lock().unwrap() as usize))
+            }
+            ProgressEvent::StartedErasing => {
+                let mut pb = pb.lock().unwrap();
+                pb.reset(Some(*total_sector_size.lock().unwrap() as usize))
+            }
+            ProgressEvent::StartedProgramming => {
+                let mut pb = pb.lock().unwrap();
+                pb.reset(Some(*total_page_size.lock().unwrap() as usize))
+            }
+
+            ProgressEvent::PageFilled { size, .. } => {
+                let mut pb = pb.lock().unwrap();
+                pb.update(size as usize);
+            }
+            ProgressEvent::SectorErased { size, .. } => {
+                let mut pb = pb.lock().unwrap();
+                pb.update(size as usize);
+            }
+            ProgressEvent::PageProgrammed { size, .. } => {
+                let mut pb = pb.lock().unwrap();
+                pb.update(size as usize);
+            }
+            _ => {}
+        });
+        download_option.progress = Some(&progress);
+        loader.commit(&mut session, download_option)?;
+
+        Ok(session)
+    }
 }

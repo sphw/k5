@@ -11,6 +11,7 @@ mod elf;
 mod flash;
 mod image;
 mod logs;
+mod xfel;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -20,21 +21,24 @@ fn main() -> color_eyre::Result<()> {
             let mut config = parse_config(&path)?;
             config.build(&path)?;
         }
-        Args::Flash { path, probe } => {
+        Args::Flash { path } => {
             let mut config = parse_config(&path)?;
-            let target = config.build(&path)?;
-            let ihex_path = target.join("final.ihex");
-            config.probe.merge(probe);
-            flash::flash(config.probe, ihex_path)?;
+            let _ = config.build(&path)?;
+            flash::flash(&config)?;
+            //flash::flash(config.probe, ihex_path)?;
         }
-        Args::Logs { path, probe } => {
+        Args::Logs { path } => {
             let mut config = parse_config(&path)?;
             let target = config.build(&path)?;
             let ihex_path = target.join("final.ihex");
-            config.probe.merge(probe);
-            let mut session = flash::flash(config.probe.clone(), ihex_path)?;
+            let mut session = flash::flash(&config)?;
             let kernel_path = target.join("kernel.elf");
-            logs::print_logs(&config, kernel_path, &mut session)?;
+            match session {
+                flash::Session::Xfel(xfel) => todo!(),
+                flash::Session::Probe(mut session) => {
+                    logs::print_logs(&config, kernel_path, &mut session)?;
+                }
+            }
         }
     }
     Ok(())
@@ -53,8 +57,6 @@ enum Args {
         /// path to directory containing `app.toml`
         #[clap(default_value = ".")]
         path: PathBuf,
-        #[clap(flatten)]
-        probe: flash::FlashConfig,
     },
 
     /// Flashes and displays logs for a k5 app
@@ -62,8 +64,6 @@ enum Args {
         /// path to directory containing `app.toml`
         #[clap(default_value = ".")]
         path: PathBuf,
-        #[clap(flatten)]
-        probe: flash::FlashConfig,
     },
 }
 
