@@ -24,8 +24,8 @@ use std::{
 };
 
 use crate::flash;
-use crate::image::ImageBuilder;
-use crate::image::SRecImageBuilder;
+use crate::image::{D1ImageBuilder, Image, ImageBuilder};
+use crate::image::{SRecImage, SRecImageBuilder};
 
 pub static TASK_RLINK_BYTES: &[u8] = include_bytes!("task-rlink.x");
 pub static TASK_LINK_BYTES: &[u8] = include_bytes!("task-link.x");
@@ -60,7 +60,7 @@ pub struct Task {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct Kernel {
-    crate_path: PathBuf,
+    pub crate_path: PathBuf,
     #[serde(default)]
     stack_size: usize,
     pub(crate) sizes: HashMap<String, usize>,
@@ -147,12 +147,24 @@ impl Config {
         }
 
         let target_path = self.kernel.crate_path.join("target");
-        let mut srec_builder = SRecImageBuilder::new(self.regions.clone(), self.platform);
+        let mut builder: Box<dyn ImageBuilder<Image = SRecImage>> = match self.platform {
+            Platform::AwD1 => Box::new(D1ImageBuilder::new(
+                self.regions.clone(),
+                self.platform,
+                &self.kernel,
+            )?),
+            _ => Box::new(SRecImageBuilder::new(
+                self.regions.clone(),
+                self.platform,
+                &self.kernel,
+            )),
+        };
         for task in &self.tasks {
-            srec_builder.task(task)?;
+            builder.task(task)?;
         }
-        srec_builder.kernel(&self.kernel)?;
-
+        builder.kernel(&self.kernel)?;
+        let img = builder.build()?;
+        img.write(&target_path)?;
         Ok(target_path)
     }
 }
@@ -383,7 +395,7 @@ impl MemorySection {
 
 #[derive(Default)]
 pub struct SRecWriter {
-    buf: Vec<srec::Record>,
+    pub buf: Vec<srec::Record>,
 }
 
 impl SRecWriter {
@@ -400,7 +412,7 @@ impl SRecWriter {
             }
             let data =
                 &image[header.p_offset as usize..(header.p_offset + header.p_filesz) as usize];
-            println!("writing {:?}", header.p_paddr);
+            println!("writing {:?} {:?}", header.p_paddr, data.len());
             let mut addr = header.p_paddr as u32;
             for chunk in data.chunks(250) {
                 self.buf.push(srec::Record::S3(srec::Data {
@@ -413,7 +425,17 @@ impl SRecWriter {
         Ok(elf.header.e_entry as usize)
     }
 
-    pub(crate) fn finalize(mut self) -> String {
+    pub(crate) fn write_slice(&mut self, mut addr: usize, buf: &[u8]) {
+        for chunk in buf.chunks(250) {
+            self.buf.push(srec::Record::S3(srec::Data {
+                address: srec::Address32(addr as u32),
+                data: chunk.to_vec(),
+            }));
+            addr += chunk.len()
+        }
+    }
+
+    pub(crate) fn finalize(&mut self) -> String {
         let sec_count = self.buf.len();
         if sec_count < 0x1_00_00 {
             self.buf
