@@ -30,11 +30,10 @@ fn main() -> color_eyre::Result<()> {
         Args::Logs { path } => {
             let mut config = parse_config(&path)?;
             let target = config.build(&path)?;
-            let ihex_path = target.join("final.ihex");
-            let mut session = flash::flash(&config)?;
+            let session = flash::flash(&config)?;
             let kernel_path = target.join("kernel.elf");
             match session {
-                flash::Session::Xfel(xfel) => todo!(),
+                flash::Session::Xfel(_xfel) => todo!(),
                 flash::Session::Probe(mut session) => {
                     logs::print_logs(&config, kernel_path, &mut session)?;
                 }

@@ -1,4 +1,3 @@
-use std::io::Stdout;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::str::FromStr;

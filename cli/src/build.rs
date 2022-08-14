@@ -24,18 +24,20 @@ use std::{
 };
 
 use crate::flash;
-use crate::image::{D1ImageBuilder, Image, ImageBuilder};
+use crate::image::{Image, ImageBuilder};
 use crate::image::{SRecImage, SRecImageBuilder};
 
-pub static TASK_RLINK_BYTES: &[u8] = include_bytes!("task-rlink.x");
-pub static TASK_LINK_BYTES: &[u8] = include_bytes!("task-link.x");
+pub static ARM_TASK_RLINK_BYTES: &[u8] = include_bytes!("task-rlink.x");
+pub static ARM_TASK_LINK_BYTES: &[u8] = include_bytes!("task-link.x");
+pub static RV_TASK_RLINK_BYTES: &[u8] = include_bytes!("rv-task-rlink.x");
+pub static RV_TASK_LINK_BYTES: &[u8] = include_bytes!("rv-task-link.x");
 pub static KERN_LINK_BYTES: &[u8] = include_bytes!("kern-link.x");
 pub static KERN_RV_LINK_BYTES: &[u8] = include_bytes!("kern-rv-link.x");
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(flatten)]
-    pub probe: flash::FlashConfig,
+    pub flash_probe: flash::FlashConfig,
     pub tasks: Vec<Task>,
     pub regions: HashMap<String, MemorySection>,
     stack_size: Option<usize>,
@@ -75,13 +77,27 @@ pub enum Platform {
 }
 
 impl Platform {
-    fn kern_link(&self) -> &'static [u8] {
+    pub(crate) fn kern_link(&self) -> &'static [u8] {
         match self {
             Platform::RV32 => KERN_RV_LINK_BYTES,
             Platform::AwD1 => {
                 todo!()
             }
             Platform::ArmV8m => KERN_LINK_BYTES,
+        }
+    }
+
+    pub(crate) fn task_rlink(&self) -> &'static [u8] {
+        match self {
+            Platform::AwD1 | Platform::RV32 => RV_TASK_RLINK_BYTES,
+            Platform::ArmV8m => ARM_TASK_RLINK_BYTES,
+        }
+    }
+
+    pub(crate) fn task_link(&self) -> &'static [u8] {
+        match self {
+            Platform::AwD1 | Platform::RV32 => RV_TASK_LINK_BYTES,
+            Platform::ArmV8m => ARM_TASK_LINK_BYTES,
         }
     }
 }
@@ -260,13 +276,13 @@ impl Task {
         crate_path.join("target")
     }
 
-    pub fn build(&self) -> Result<PathBuf> {
+    pub fn build(&self, plat: Platform) -> Result<PathBuf> {
         crate::print_header(format!("Building {}", self.name));
         let TaskSource::Crate { crate_path } = &self.source;
 
         let target_dir = crate_path.join("target");
         fs::create_dir_all(&target_dir)?;
-        fs::write(target_dir.join("link.x"), TASK_RLINK_BYTES)?;
+        fs::write(target_dir.join("link.x"), plat.task_rlink())?;
         build_crate(crate_path, true, None)
     }
 
@@ -278,6 +294,7 @@ impl Task {
         link_script: &[u8],
     ) -> Result<()> {
         let target_dir = self.target_dir();
+        println!("{:?}", task_loc);
         fs::write(
             target_dir.join("memory.x"),
             task_loc
@@ -285,7 +302,7 @@ impl Task {
                 .as_bytes(),
         )?;
         fs::write(target_dir.join("link.x"), link_script)?;
-        let status = Command::new("arm-none-eabi-ld")
+        let status = Command::new("riscv64-unknown-elf-ld")
             .current_dir(target_dir)
             .arg(reloc_elf)
             .arg("-o")
@@ -342,7 +359,7 @@ pub(crate) fn get_elf_size(
         .ok_or_else(|| {
             anyhow!("no stack region found. Make sure to specify a signle region for the stack")
         })?;
-    let stack_range = sizes.get_mut(stack_name).unwrap();
+    let stack_range = sizes.entry(stack_name.clone()).or_insert(0..0);
     stack_range.end = stack_range.end + stack_space_size;
     Ok(sizes)
 }

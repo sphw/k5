@@ -5,6 +5,7 @@ use std::{
 };
 
 use color_eyre::Result;
+use colored::Colorize;
 use kdam::{tqdm, Column, RichProgress};
 use probe_rs::{
     flashing::{DownloadOptions, FlashProgress, ProgressEvent},
@@ -85,31 +86,31 @@ pub struct ProbeConfig {
 //     }
 // }
 
-impl ProbeConfig {
-    pub(crate) fn merge(&mut self, other: ProbeConfig) {
-        if let Some(chip) = other.chip {
-            self.chip = Some(chip)
-        }
-        if let Some(protocol) = other.protocol {
-            self.protocol = Some(protocol)
-        }
-        if let Some(probe_selector) = other.probe_selector {
-            self.probe_selector = Some(probe_selector)
-        }
-        if let Some(speed) = other.speed {
-            self.speed = Some(speed)
-        }
-        if other.connect_under_reset {
-            self.connect_under_reset = other.connect_under_reset
-        }
-        if other.dry_run {
-            self.dry_run = other.dry_run
-        }
-        if other.allow_erase_all {
-            self.allow_erase_all = other.allow_erase_all
-        }
-    }
-}
+// impl ProbeConfig {
+// pub(crate) fn merge(&mut self, other: ProbeConfig) {
+//     if let Some(chip) = other.chip {
+//         self.chip = Some(chip)
+//     }
+//     if let Some(protocol) = other.protocol {
+//         self.protocol = Some(protocol)
+//     }
+//     if let Some(probe_selector) = other.probe_selector {
+//         self.probe_selector = Some(probe_selector)
+//     }
+//     if let Some(speed) = other.speed {
+//         self.speed = Some(speed)
+//     }
+//     if other.connect_under_reset {
+//         self.connect_under_reset = other.connect_under_reset
+//     }
+//     if other.dry_run {
+//         self.dry_run = other.dry_run
+//     }
+//     if other.allow_erase_all {
+//         self.allow_erase_all = other.allow_erase_all
+//     }
+// }
+// }
 
 impl From<ProbeConfig> for ProbeOptions {
     fn from(val: ProbeConfig) -> Self {
@@ -128,9 +129,12 @@ impl From<ProbeConfig> for ProbeOptions {
 
 pub fn flash(config: &Config) -> Result<Session> {
     let target = config.kernel.crate_path.join("target");
-    match &config.probe {
+    match &config.flash_probe {
         FlashConfig::Xfel { flash, base_addr } => {
-            let device = XfelDevice::connect(*flash)?;
+            let device = XfelDevice::connect(*flash).map_err(|err| {
+                println!("{} {}", " Hint ".on_red().white(), "Remember to put the device into FEL mode, this can be done by holding down the FEL button and hitting reset.");
+               err
+            })?;
             let bin = target.join("final.bin");
             device.write_flash(*base_addr, &bin)?;
             Ok(Session::Xfel(device))

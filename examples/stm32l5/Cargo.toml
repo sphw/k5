@@ -10,7 +10,7 @@ alloc-cortex-m = { git = "https://github.com/sphw/alloc-cortex-m.git", branch = 
 # alloc-cortex-m = { path = "../../../alloc-cortex-m" }
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
-kernel = { path = "../../kernel" }
+kernel = { path = "../../kernel", default-features = false, features = ["cortex_m"] }
 abi = { path = "../../abi" }
 defmt = { version = "0.3", features = ["encoding-raw"] }
 stm32l5 = { version = "0.15", features = ["stm32l562"], default-features = false }

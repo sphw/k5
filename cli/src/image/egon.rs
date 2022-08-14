@@ -10,7 +10,6 @@ use color_eyre::Result;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Cursor;
-use std::mem;
 
 pub const D1_HEADER_SIZE: usize = core::mem::size_of::<HeadData>();
 
@@ -20,6 +19,7 @@ pub struct D1ImageBuilder {
 }
 
 impl D1ImageBuilder {
+    #[allow(dead_code)]
     pub(crate) fn new(
         mut regions: HashMap<String, MemorySection>,
         platform: Platform,
@@ -41,7 +41,7 @@ impl D1ImageBuilder {
 const STAMP_CHECKSUM: u32 = 0x5F0A6C39;
 const EGON_MAGIC: [u8; 8] = *b"eGON.BT0";
 const DEFAULT_HEAD: HeadData = HeadData {
-    jump_inst: RVJumpInst::new(mem::size_of::<HeadData>()),
+    jump_inst: RVJumpInst::new(D1_HEADER_SIZE),
     magic: EGON_MAGIC, // magic number
     checksum: STAMP_CHECKSUM,
     length: 0,

@@ -12,7 +12,6 @@ pub use egon::*;
 
 use crate::build::{
     align_up, get_elf_size, Kernel, MemoryRole, MemorySection, Platform, SRecWriter, Task, TaskLoc,
-    TASK_LINK_BYTES,
 };
 
 pub(crate) trait ImageBuilder {
@@ -73,7 +72,7 @@ impl ImageBuilder for SRecImageBuilder {
     }
 
     fn task(&mut self, task: &Task) -> Result<()> {
-        let reloc = task.build()?;
+        let reloc = task.build(self.platform)?;
         let elf = &task.target_dir().join("size.elf");
         task.link(
             &reloc,
@@ -81,7 +80,7 @@ impl ImageBuilder for SRecImageBuilder {
             &TaskLoc {
                 regions: self.regions.clone(),
             },
-            TASK_LINK_BYTES,
+            self.platform.task_link(),
         )?;
         let sizes = get_elf_size(elf, &self.regions, task.stack_space_size)?;
         let regions: HashMap<_, _> = sizes
@@ -109,7 +108,7 @@ impl ImageBuilder for SRecImageBuilder {
             &TaskLoc {
                 regions: regions.clone(),
             },
-            TASK_LINK_BYTES,
+            self.platform.task_link(),
         )?;
 
         let entrypoint = self.output.write(&elf)?;
