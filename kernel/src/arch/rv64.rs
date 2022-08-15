@@ -1,3 +1,4 @@
+use abi::{SyscallArgs, SyscallIndex, ThreadRef};
 use core::arch::asm;
 use core::mem::{self, MaybeUninit};
 use core::ptr;
@@ -56,7 +57,7 @@ pub(crate) fn init_kernel<'k, 't>(tasks: &'t [crate::TaskDesc]) -> &'k mut crate
 fn init_log() {}
 
 #[inline]
-unsafe fn kernel() -> *mut Kernel {
+pub(crate) unsafe fn kernel() -> *mut Kernel {
     KERNEL.as_mut_ptr()
 }
 
@@ -100,7 +101,21 @@ pub struct SavedThreadState {
 }
 
 impl SavedThreadState {
-    pub fn set_syscall_return(&mut self, _ret: abi::SyscallReturn) {}
+    pub(super) fn syscall_args(&self) -> &SyscallArgs {
+        // Safety: repr(c) guarentees the order of fields, we are taking the first
+        // 6 fields as SyscallArgs
+        unsafe { mem::transmute(&self.a2) }
+    }
+
+    pub fn syscall_args_mut(&mut self) -> &mut SyscallArgs {
+        // Safety: repr(c) guarentees the order of fields, we are taking the first
+        // 6 fields as SyscallArgs
+        unsafe { mem::transmute(&mut self.a2) }
+    }
+
+    pub fn set_syscall_return(&mut self, ret: abi::SyscallReturn) {
+        self.a0 = ret.into();
+    }
 }
 
 pub(crate) fn translate_task_ptr<'a, T: ptr::Pointee + ?Sized>(
@@ -132,26 +147,35 @@ fn validate_addr(addr: usize, len: usize, regions: &[Region]) -> bool {
 
 pub(crate) fn clear_mem(_task: &Task) {}
 
-unsafe fn set_current_tcb(task: &Tcb) {
+pub(crate) unsafe fn set_current_tcb(task: &Tcb) {
     riscv::register::mscratch::write((task as *const Tcb).addr())
 }
 
-unsafe fn get_current_tcb() -> &'static mut Tcb {
+pub(super) unsafe fn get_current_tcb() -> &'static mut Tcb {
     &mut *(riscv::register::mscratch::read() as *mut Tcb)
 }
 
-unsafe fn trap_handler() {
+unsafe fn trap_handler(index: SyscallIndex) {
     let cause = riscv::register::mcause::read();
     match cause.cause() {
         Trap::Interrupt(Interrupt::MachineExternal) => {}
         Trap::Exception(Exception::UserEnvCall) => {
-            // let mepc = riscv::register::mepc::read() + 4;
-            // riscv::register::mepc::write(mepc);
             let tcb = get_current_tcb();
+            let args = unsafe { tcb.saved_state.syscall_args() };
             tcb.saved_state.pc += 4;
+            super::syscall_inner(index);
         }
         _ => {}
     }
+}
+
+#[inline]
+pub(crate) fn switch_thread(kernel: &Kernel, tcb_ref: ThreadRef) {
+    let tcb = kernel.scheduler.get_tcb(tcb_ref).unwrap();
+    let task = kernel.task(tcb.task).unwrap();
+    //apply_region_table(&task.region_table);
+    // Safety: The TCB comes from the kernel which is stored statically so this is safe
+    unsafe { set_current_tcb(tcb) }
 }
 
 #[no_mangle]

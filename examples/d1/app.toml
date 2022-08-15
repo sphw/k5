@@ -6,8 +6,8 @@ flash = "SpiNor"
 base_addr = 0x30000
 
 [regions]
-flash = { address = 0x40020000, size = 0x90000 }
-ram = { address = 0x400f0000, size = 0x80000, role = "stack" }
+flash = { address = 0x40020000, size = 0xf0000 }
+ram = { address = 0x40110000, size = 0x80000, role = "stack" }
 
 [kernel]
 crate_path = "./"

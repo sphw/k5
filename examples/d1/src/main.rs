@@ -102,7 +102,6 @@ fn main() -> ! {
         crate::ALLOCATOR.init(unsafe { HEAP })
     }
     init_pmp();
-    println!("kernel init");
 
     // // Set up timers
     // let Timers {
@@ -138,8 +137,6 @@ fn main() -> ! {
     // plic.prio[76].write(|w| w.priority().p1());
     // plic.mie[2].write(|w| unsafe { w.bits((1 << 11) | (1 << 12)) });
 
-    println!("return from ecall");
-
     // // Blink LED
     // loop {
     //     // Start both counters for 3M ticks: that's 1s for timer 0
@@ -157,23 +154,6 @@ fn main() -> ! {
     let mut kernel = kernel::KernelBuilder::new(task_table::TASKS);
     let _idle = kernel.idle_thread(task_table::IDLE);
     kernel.start()
-}
-
-#[no_mangle]
-unsafe fn print_trap_handler(trap_frame: *const riscv_rt::TrapFrame) {
-    println!("trap_handler: {:?}", &*trap_frame);
-    let cause = riscv::register::mcause::read();
-    match cause.cause() {
-        Trap::Interrupt(Interrupt::MachineExternal) => {}
-        Trap::Exception(Exception::MachineEnvCall) => {
-            println!("ecall");
-            let mepc = riscv::register::mepc::read() + 4;
-            riscv::register::mepc::write(mepc);
-        }
-        other => {
-            println!("other mcause: {:?}", other);
-        }
-    }
 }
 
 pub struct RISCVHeap {
