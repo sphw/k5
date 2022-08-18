@@ -152,7 +152,7 @@ fn main() -> ! {
     //     unsafe { riscv::asm::wfi() };
     // }
     let mut kernel = kernel::KernelBuilder::new(task_table::TASKS);
-    let _idle = kernel.idle_thread(task_table::IDLE);
+    let _idle = kernel.idle_thread(task_table::IDLE.connect(*b"0123456789abcdef"));
     kernel.start()
 }
 
@@ -219,7 +219,7 @@ fn init_pmp() {
     pmpaddr0::write(0x40000000usize >> 2 | (0xf00000 - 1));
     pmpaddr1::write(0x40f00000usize >> 2 | (0xf00000 - 1));
     // pmpaddr1::write(0x40200000usize >> 2);
-    // pmpaddr2::write(0x80000000usize >> 2);
-    // pmpaddr3::write(0x80200000usize >> 2);
+    pmpaddr2::write(0x80000000usize >> 2);
+    pmpaddr3::write(0x80200000usize >> 2);
     // pmpaddr4::write(0xffffffffusize >> 2);
 }

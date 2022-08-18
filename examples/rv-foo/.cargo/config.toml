@@ -13,6 +13,5 @@ rustflags = [
 target = "riscv64imac-unknown-none-elf"
 
 [profile.dev]
-opt-level = "z"
-lto = true
-
+#opt-level = "z"
+#lto = true

@@ -7,7 +7,3 @@ rustflags = [
     # "-C", "relocation-model=pic",
 ]
 
-
-[profile.dev]
-#opt-level = "z"
-#lto = true
