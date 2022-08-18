@@ -62,6 +62,7 @@ pub(crate) unsafe fn kernel() -> *mut Kernel {
 }
 
 pub fn log(_bytes: &[u8]) {}
+
 #[derive(Default)]
 pub struct SavedThreadState {
     ra: u64,
@@ -184,6 +185,7 @@ pub(crate) fn switch_thread(kernel: &Kernel, tcb_ref: ThreadRef) {
 unsafe extern "C" fn _start_trap() -> ! {
     asm!(
         "
+         .align 4
          # we store the current task pointer in mscratch
          # so we swap it into a0, and then save all the pointers to saved state
          csrrw a0, mscratch, a0
