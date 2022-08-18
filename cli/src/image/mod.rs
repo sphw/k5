@@ -72,17 +72,14 @@ impl ImageBuilder for SRecImageBuilder {
     }
 
     fn task(&mut self, task: &Task) -> Result<()> {
-        let reloc = task.build(self.platform)?;
-        let elf = &task.target_dir().join("size.elf");
-        task.link(
-            &reloc,
-            elf,
+        let elf = task.build(
+            self.platform,
             &TaskLoc {
                 regions: self.regions.clone(),
             },
-            self.platform.task_link(),
+            true,
         )?;
-        let sizes = get_elf_size(elf, &self.regions, task.stack_space_size)?;
+        let sizes = get_elf_size(&elf, &self.regions, task.stack_space_size)?;
         let regions: HashMap<_, _> = sizes
             .clone()
             .into_iter()
@@ -101,15 +98,15 @@ impl ImageBuilder for SRecImageBuilder {
             loc.address += align_up(size.len(), 32);
         }
         println!("{:?}", self.current_locs);
-        let elf = task.target_dir().join("final.elf");
-        task.link(
-            &reloc,
-            &elf,
+        fs::remove_file(&elf)?;
+        let elf = task.build(
+            self.platform,
             &TaskLoc {
                 regions: regions.clone(),
             },
-            self.platform.task_link(),
+            false,
         )?;
+        std::fs::copy(&elf, task.target_dir().join("final.elf"))?;
 
         let entrypoint = self.output.write(&elf)?;
         let stack_region = regions

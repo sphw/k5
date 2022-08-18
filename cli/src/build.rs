@@ -195,6 +195,15 @@ impl Kernel {
         crate::print_header("Building kernel");
         let target_dir = self.crate_path.join("target");
         fs::create_dir_all(&target_dir)?;
+        let regions = self
+            .sizes
+            .iter()
+            .map(|(k, v)| {
+                let mut reg = regions.get(k).expect("missing region").clone();
+                reg.size = *v;
+                (k.clone(), reg)
+            })
+            .collect();
         let kern_loc = TaskLoc { regions };
         fs::write(
             target_dir.join("memory.x"),
@@ -209,11 +218,11 @@ impl Kernel {
         let task_list = codegen::TaskList { tasks };
         let task_list_path = target_dir.join("task_list.json");
         fs::write(task_list_path.clone(), serde_json::to_vec(&task_list)?)?;
-        build_crate(&self.crate_path, false, Some(&task_list_path))
+        build_crate(&self.crate_path, Some(&task_list_path), "link.x")
     }
 }
 
-fn build_crate(crate_path: &Path, relocate: bool, task_list: Option<&Path>) -> Result<PathBuf> {
+fn build_crate(crate_path: &Path, task_list: Option<&Path>, link_name: &str) -> Result<PathBuf> {
     let target_dir = crate_path.join("target");
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&crate_path)
@@ -221,15 +230,12 @@ fn build_crate(crate_path: &Path, relocate: bool, task_list: Option<&Path>) -> R
         .args(&["--message-format", "json-diagnostic-rendered-ansi"])
         .arg("--")
         .arg("-C")
-        .arg("link-arg=-Tlink.x")
+        .arg(format!("link-arg=-T{link_name}"))
         .arg("-L")
         .arg(format!("{}", target_dir.display()));
     if std::env::var("DEFMT_LOG").is_err() {
         cmd.env("DEFMT_LOG", "debug");
     }
-    if relocate {
-        cmd.arg("-C").arg("link-arg=-r");
-    };
     if let Some(task_list) = task_list {
         cmd.env("K5_TASK_LIST", task_list);
     }
@@ -276,49 +282,52 @@ impl Task {
         crate_path.join("target")
     }
 
-    pub fn build(&self, plat: Platform) -> Result<PathBuf> {
+    pub fn build(&self, plat: Platform, task_loc: &TaskLoc, size: bool) -> Result<PathBuf> {
         crate::print_header(format!("Building {}", self.name));
         let TaskSource::Crate { crate_path } = &self.source;
 
         let target_dir = crate_path.join("target");
         fs::create_dir_all(&target_dir)?;
-        fs::write(target_dir.join("link.x"), plat.task_rlink())?;
-        build_crate(crate_path, true, None)
-    }
-
-    pub fn link(
-        &self,
-        reloc_elf: &Path,
-        dest: &Path,
-        task_loc: &TaskLoc,
-        link_script: &[u8],
-    ) -> Result<()> {
-        let target_dir = self.target_dir();
-        println!("{:?}", task_loc);
         fs::write(
             target_dir.join("memory.x"),
             task_loc
                 .memory_linker_script(self.stack_space_size)?
                 .as_bytes(),
         )?;
-        fs::write(target_dir.join("link.x"), link_script)?;
-        let status = Command::new("riscv64-unknown-elf-ld")
-            .current_dir(target_dir)
-            .arg(reloc_elf)
-            .arg("-o")
-            .arg(dest)
-            .arg("-Tlink.x")
-            .arg("--gc-sections")
-            .arg("-z")
-            .arg("common-page-size=0x20")
-            .arg("-z")
-            .arg("max-page-size=0x20")
-            .status()?;
-        if !status.success() {
-            return Err(anyhow!("link failed"));
-        }
-        Ok(())
+        let link_name = if size { "link-size.x" } else { "link.x" };
+        fs::write(target_dir.join(link_name), plat.task_link())?;
+        build_crate(crate_path, None, link_name)
     }
+
+    // pub fn link(
+    //     &self,
+    //     reloc_elf: &Path,
+    //     dest: &Path,
+    //     task_loc: &TaskLoc,
+    //     link_script: &[u8],
+    // ) -> Result<()> {
+    //     let target_dir = self.target_dir();
+    //     println!("{:?}", task_loc);
+
+    //     fs::write(target_dir.join("link.x"), link_script)?;
+    //     let status = Command::new("riscv64-unknown-elf-ld")
+    //         .current_dir(target_dir)
+    //         .arg(reloc_elf)
+    //         .arg("-o")
+    //         .arg(dest)
+    //         .arg("-Tlink.x")
+    //         .arg("--gc-sections")
+    //         .arg("-z")
+    //         .arg("common-page-size=0x20")
+    //         .arg("-z")
+    //         .arg("max-page-size=0x20")
+    //         .arg("--verbose")
+    //         .status()?;
+    //     if !status.success() {
+    //         return Err(anyhow!("link failed"));
+    //     }
+    //     Ok(())
+    // }
 }
 
 pub(crate) fn get_elf_size(
@@ -334,8 +343,9 @@ pub(crate) fn get_elf_size(
     };
     let mut sizes = HashMap::new();
     let mut add_section = |start, size| {
+        println!("add_section: {:x} {:x}", start, size);
         for (name, region) in regions.iter() {
-            if region.contains(start) {
+            if region.contains(start) || region.contains(start + size) {
                 let end = start + size;
                 let range = sizes.entry(name.clone()).or_insert(start..end);
                 range.start = range.start.min(start);
@@ -346,6 +356,7 @@ pub(crate) fn get_elf_size(
         false
     };
     for header in &elf.program_headers {
+        println!("{:?}", header);
         add_section(header.p_vaddr as usize, header.p_memsz as usize);
         if header.p_vaddr != header.p_paddr
             && !add_section(header.p_paddr as usize, header.p_filesz as usize)
@@ -392,6 +403,7 @@ impl TaskLoc {
             )?;
         }
         file += "}";
+        println!("{}", file);
         Ok(file)
     }
 }

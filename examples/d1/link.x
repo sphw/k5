@@ -2,10 +2,10 @@ INCLUDE memory.x
 
 REGION_ALIAS("REGION_TEXT", FLASH)
 REGION_ALIAS("REGION_RODATA", FLASH)
-REGION_ALIAS("REGION_DATA", FLASH)
-REGION_ALIAS("REGION_BSS", FLASH)
-REGION_ALIAS("REGION_HEAP", FLASH)
-REGION_ALIAS("REGION_STACK", FLASH)
+REGION_ALIAS("REGION_DATA", RAM)
+REGION_ALIAS("REGION_BSS", RAM)
+REGION_ALIAS("REGION_HEAP", RAM)
+REGION_ALIAS("REGION_STACK", RAM)
 
 PROVIDE(_stext = ORIGIN(REGION_TEXT));
 PROVIDE(_stack_start = ORIGIN(REGION_STACK) + LENGTH(REGION_STACK));
@@ -28,7 +28,7 @@ PROVIDE(ExceptionHandler = DefaultExceptionHandler);
 
 /* # Pre-initialization function */
 /* If the user overrides this using the `#[pre_init]` attribute or by creating a `__pre_init` function,
-   then the function this points to will be called before the FLASH is initialized. */
+   then the function this points to will be called before the RAM is initialized. */
 PROVIDE(__pre_init = default_pre_init);
 
 /* A PAC/HAL defined routine that should initialize custom interrupt controller if needed. */
@@ -48,8 +48,6 @@ PROVIDE(_mp_hook = default_mp_hook);
   but by providing the `_start_trap` symbol external crates can override.
 */
 PROVIDE(_start_trap = default_start_trap);
-
-
 
 SECTIONS
 {
@@ -183,5 +181,3 @@ then modify your build script to compile the C code _without_ the
 details.");
 
 /* Do not exceed this mark in the error messages above                                    | */
-
-
