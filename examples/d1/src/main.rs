@@ -30,32 +30,13 @@ use crate::timer::{Timer, TimerMode, TimerPrescaler, TimerSource, Timers};
 
 struct Uart(d1_pac::UART0);
 static mut PRINTER: Option<Uart> = None;
-impl core::fmt::Write for Uart {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        for byte in s.as_bytes() {
-            self.0.thr().write(|w| unsafe { w.thr().bits(*byte) });
-            while self.0.usr.read().tfnf().bit_is_clear() {}
-        }
-        Ok(())
-    }
-}
-pub fn _print(args: core::fmt::Arguments) {
-    use core::fmt::Write;
-    unsafe {
-        PRINTER.as_mut().unwrap().write_fmt(args).ok();
-    }
-}
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => {
-        $crate::_print(core::format_args!($($arg)*));
-    }
-}
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => {
-        $crate::_print(core::format_args!($($arg)*));
-        $crate::print!("\r\n");
+
+#[no_mangle]
+fn board_log(bytes: &[u8]) {
+    let printer = unsafe { PRINTER.as_mut().unwrap() };
+    for byte in bytes {
+        printer.0.thr().write(|w| unsafe { w.thr().bits(*byte) });
+        while printer.0.usr.read().tfnf().bit_is_clear() {}
     }
 }
 
@@ -203,7 +184,6 @@ fn oom(_: core::alloc::Layout) -> ! {
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    println!("{:?}", info);
     loop {}
 }
 

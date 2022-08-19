@@ -174,7 +174,7 @@ unsafe impl SysCall for LogCall {
     ) -> Result<CallReturn, KernelError> {
         let tcb = kern.scheduler.current_thread()?;
 
-        let log_buf = get_buf::<255>(kern, tcb, self.in_addr, self.in_len)?;
+        let log_buf = get_buf::<1024>(kern, tcb, self.in_addr, self.in_len)?;
         crate::defmt_log::log(tcb.task.0 as u8 + 1, log_buf);
         Ok(CallReturn::Return {
             ret: abi::SyscallReturn::new(),

@@ -61,7 +61,12 @@ pub(crate) unsafe fn kernel() -> *mut Kernel {
     KERNEL.as_mut_ptr()
 }
 
-pub fn log(_bytes: &[u8]) {}
+pub fn log(bytes: &[u8]) {
+    extern "Rust" {
+        fn board_log(bytes: &[u8]);
+    }
+    unsafe { board_log(bytes) };
+}
 
 #[derive(Default)]
 pub struct SavedThreadState {
@@ -283,5 +288,3 @@ unsafe extern "C" fn _start_trap() -> ! {
      options(noreturn)
     )
 }
-
-unsafe fn jump_root_task() {}

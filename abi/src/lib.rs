@@ -180,7 +180,7 @@ impl From<Error> for u8 {
     }
 }
 
-#[derive(Clone, Copy, defmt::Format)]
+#[derive(Clone, Copy, defmt::Format, Debug)]
 #[repr(C)]
 pub struct CapRef(pub usize);
 
@@ -216,7 +216,7 @@ impl ThreadRef {
     }
 }
 
-#[derive(Format)]
+#[derive(Format, Debug)]
 pub struct CapListEntry {
     pub cap_ref: CapRef,
     pub desc: Cap,

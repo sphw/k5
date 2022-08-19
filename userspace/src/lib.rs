@@ -17,6 +17,11 @@ pub use rv64::*;
 pub use abi;
 
 mod defmt_logger;
+#[cfg(feature = "fmt-log")]
+mod fmt_log;
+
+#[cfg(feature = "fmt-log")]
+pub use fmt_log::*;
 
 use ::defmt::Format;
 use abi::{
@@ -96,7 +101,7 @@ fn call_innner<T: ?Sized>(
 }
 
 #[inline]
-pub(crate) fn log(data: &[u8]) -> Result<(), Error> {
+pub fn log(data: &[u8]) -> Result<(), Error> {
     let (ptr, _) = data.as_ptr().to_raw_parts();
     let addr = ptr.addr();
     let index = SyscallIndex::new()
@@ -333,13 +338,13 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     panik(buf.buf())
 }
 
-struct LenWrite {
+pub(crate) struct LenWrite {
     buf: [u8; 512],
     pos: usize,
 }
 
 impl LenWrite {
-    fn buf(&mut self) -> &mut [u8] {
+    pub(crate) fn buf(&mut self) -> &mut [u8] {
         &mut self.buf[0..self.pos]
     }
 }

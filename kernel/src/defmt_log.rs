@@ -27,7 +27,7 @@ unsafe impl defmt::Logger for KernelLogger {
 }
 
 pub(crate) fn log(id: u8, log_buf: &[u8]) {
-    let mut buf = [0u8; 257];
+    let mut buf = [0u8; 1200];
     buf[0] = id;
     buf[1] = log_buf.len() as u8;
     // NOTE: this assumes that the internal task index is the same as codegen task index, which is true for embedded,
