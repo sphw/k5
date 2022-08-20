@@ -232,7 +232,7 @@ unsafe extern "C" fn _start_trap() -> ! {
          csrr a1, mscratch
          sd a1, 9*8(a0) # store a0 now that
 
-         lw sp, 32*8(a0) # load old machine stack pointer
+         ld sp, 32*8(a0) # load old machine stack pointer
          # TODO(sphw): swap back mscratch
          csrrw a0, mscratch, a0
 
@@ -245,7 +245,6 @@ unsafe extern "C" fn _start_trap() -> ! {
 
          ld t5,  31*8(t6)
          ld ra,   0*8(t6)
-         ld sp,   1*8(t6)
          ld gp,   2*8(t6)
          ld tp,   3*8(t6)
          ld t0,   4*8(t6)
@@ -275,6 +274,7 @@ unsafe extern "C" fn _start_trap() -> ! {
          ld t4,  28*8(t6)
          ld t5,  29*8(t6)
          sd sp,  32*8(t6)
+         ld sp,   1*8(t6)
 
          csrrw t6, mscratch, t6 #
          csrrw t5, mscratch, t5
