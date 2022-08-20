@@ -8,7 +8,6 @@ edition = "2021"
 [features]
 rv64 = []
 cortex_m = []
-fmt-log = []
 
 [dependencies]
 abi = { path = "../abi" }

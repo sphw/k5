@@ -43,18 +43,16 @@ pub(crate) fn init_tcb_stack(task: &Task, tcb: &mut Tcb) {
 }
 
 pub(crate) fn init_kernel<'k, 't>(tasks: &'t [crate::TaskDesc]) -> &'k mut crate::Kernel {
+    log(b"LOG_START");
     unsafe {
         if KERNEL_INIT.load(Ordering::SeqCst) {
             panic!("kernel already inited");
         }
-        init_log();
         let kern = KERNEL.write(Kernel::from_tasks(tasks).unwrap());
         KERNEL_INIT.store(true, Ordering::SeqCst);
         kern
     }
 }
-
-fn init_log() {}
 
 #[inline]
 pub(crate) unsafe fn kernel() -> *mut Kernel {

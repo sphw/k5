@@ -4,8 +4,9 @@
 #![feature(asm_sym)]
 
 use core::arch::asm;
+use defmt::println;
 use userspace as _;
-use userspace::{println, CapExt, Page};
+use userspace::{CapExt, Page};
 
 #[export_name = "main"]
 pub fn main() -> ! {

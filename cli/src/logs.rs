@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    fs::{self, File},
     io::{self, Read},
     path::{Path, PathBuf},
     sync::{
@@ -15,6 +15,7 @@ use colored::Colorize;
 use defmt_decoder::{DecodeError, Frame, Locations};
 use probe_rs::{Core, MemoryInterface as _, Session};
 use probe_rs_rtt::{Rtt, ScanRegion, UpChannel};
+use serialport::{SerialPort, SerialPortBuilder, SerialPortType};
 use signal_hook::consts::signal;
 
 const TIMEOUT: Duration = Duration::from_secs(2);
@@ -40,7 +41,7 @@ fn attach_rtt(elf: &Elf, session: &mut Session) -> Result<UpChannel> {
     Err(anyhow!("failed to attach rtt"))
 }
 
-pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) -> Result<()> {
+pub fn print_logs(config: &Config, kernel_path: PathBuf, source: LogSource) -> Result<()> {
     let mut elf = fs::File::open(kernel_path)?;
     let mut elf_data = vec![];
     elf.read_to_end(&mut elf_data)?;
@@ -83,60 +84,47 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
     let mut task_names: Vec<_> = config.tasks.iter().map(|t| t.name.clone()).collect();
     task_names.insert(0, "kern".to_string());
     let elf = Elf::parse(&elf_data).map_err(|e| anyhow!(e))?;
-    session.core(0).unwrap().reset_and_halt(TIMEOUT)?;
-    start_program(session, &elf)?;
-    let rtt = attach_rtt(&elf, session)?;
-    let mut core = session.core(0)?;
-    let mut read_buf = [0; 1024];
+    let mut log_session = source.attach(&elf)?;
     let mut was_halted = false;
     let current_dir = std::env::current_dir().unwrap();
     let exit = Arc::new(AtomicBool::new(false));
     let sig_id = signal_hook::flag::register(signal::SIGINT, exit.clone())?;
+    let mut reader = LogReader::default();
+    reader.find_start_marker(&mut log_session)?;
     while !exit.load(Ordering::Relaxed) {
-        let len = rtt.read(&mut core, &mut read_buf)?;
-        if len != 0 {
-            let mut current_pos = 0;
-            let mut chunk_len = read_buf[current_pos + 1] as usize;
-            while len >= (chunk_len + current_pos + 2) {
-                let start = current_pos + 2;
-                let end = start + chunk_len;
-                let buf = &read_buf[start..end];
-                let task_id = read_buf[current_pos] as usize;
-                let elf = &task_elfs[task_id];
-                let task_name = &task_names[task_id];
-                let decoder = &mut task_decoders[task_id];
-                decoder.received(buf);
-                loop {
-                    match decoder.decode() {
-                        Ok(frame) => {
-                            println!(
-                                "{}{} {}",
-                                level_string(frame.level()),
-                                format!("{:^fill$}", task_name, fill = task_name_width)
-                                    .bold()
-                                    .white()
-                                    .on_truecolor(0, 142, 245),
-                                frame.display_message()
-                            );
-                            if let Some(locs) = &elf.defmt_locations {
-                                let (path, line, module) =
-                                    location_info(&frame, locs, &current_dir);
-                                print_location(&path, line, &module)?;
-                            }
-                        }
-                        Err(DecodeError::UnexpectedEof) => {
-                            break;
-                        }
-                        Err(DecodeError::Malformed) => {
-                            break;
+        reader.read(&mut log_session)?;
+        while let Some((task_id, buf)) = reader.frame()? {
+            let elf = &task_elfs[task_id];
+            let task_name = &task_names[task_id];
+            let decoder = &mut task_decoders[task_id];
+            decoder.received(&buf);
+            loop {
+                match decoder.decode() {
+                    Ok(frame) => {
+                        println!(
+                            "{}{} {}",
+                            level_string(frame.level()),
+                            format!("{:^fill$}", task_name, fill = task_name_width)
+                                .bold()
+                                .white()
+                                .on_truecolor(0, 142, 245),
+                            frame.display_message()
+                        );
+                        if let Some(locs) = &elf.defmt_locations {
+                            let (path, line, module) = location_info(&frame, locs, &current_dir);
+                            print_location(&path, line, &module)?;
                         }
                     }
+                    Err(DecodeError::UnexpectedEof) => {
+                        break;
+                    }
+                    Err(DecodeError::Malformed) => {
+                        break;
+                    }
                 }
-                current_pos += chunk_len + 2;
-                chunk_len = read_buf[current_pos + 1] as usize;
             }
         }
-        let is_halted = core.core_halted()?;
+        let is_halted = log_session.was_halted()?;
 
         if is_halted && was_halted {
             break;
@@ -146,7 +134,7 @@ pub fn print_logs(config: &Config, kernel_path: PathBuf, session: &mut Session) 
     signal_hook::low_level::unregister(sig_id);
     signal_hook::flag::register_conditional_default(signal::SIGINT, exit.clone())?;
     if exit.load(Ordering::Relaxed) {
-        core.halt(TIMEOUT)?;
+        log_session.halt()?;
     }
 
     Ok(())
@@ -229,4 +217,126 @@ fn location_info(
         location.file.display().to_string()
     };
     (path, location.line as u32, location.module.clone())
+}
+
+pub enum LogSource<'a> {
+    Rtt(&'a mut Session),
+    Serial,
+}
+
+impl<'a> LogSource<'a> {
+    fn attach(self, elf: &Elf) -> Result<LogSession<'a>> {
+        match self {
+            LogSource::Rtt(session) => {
+                session.core(0).unwrap().reset_and_halt(TIMEOUT)?;
+                start_program(session, &elf)?;
+                let channel = attach_rtt(&elf, session)?;
+                let core = session.core(0)?;
+                Ok(LogSession::Rtt { core, channel })
+            }
+            LogSource::Serial => {
+                let port = serialport::available_ports()?
+                    .into_iter()
+                    .filter(|p| matches!(p.port_type, SerialPortType::UsbPort(_)))
+                    .next()
+                    .ok_or_else(|| anyhow!("no serial port found"))?;
+                println!("attaching to port: {:?}", port.port_name);
+                let port = serialport::new(port.port_name, 115200)
+                    .timeout(Duration::from_secs(60))
+                    .open()?;
+                Ok(LogSession::Serial(port))
+            }
+        }
+    }
+}
+
+enum LogSession<'a> {
+    Rtt {
+        core: probe_rs::Core<'a>,
+        channel: UpChannel,
+    },
+    Serial(Box<dyn SerialPort>),
+}
+
+impl<'a> LogSession<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        match self {
+            LogSession::Rtt {
+                ref mut core,
+                channel,
+            } => Ok(channel.read(core, buf)?),
+            LogSession::Serial(port) => Ok(port.read(buf)?),
+        }
+    }
+
+    fn halt(&mut self) -> Result<()> {
+        match self {
+            LogSession::Rtt { ref mut core, .. } => {
+                core.halt(TIMEOUT)?;
+                Ok(())
+            }
+            LogSession::Serial(_) => Ok(()),
+        }
+    }
+
+    fn was_halted(&mut self) -> Result<bool> {
+        match self {
+            LogSession::Rtt { ref mut core, .. } => {
+                let halted = core.core_halted()?;
+                Ok(halted)
+            }
+            LogSession::Serial(_) => Ok(false),
+        }
+    }
+}
+
+#[derive(Default)]
+struct LogReader {
+    buf: Vec<u8>,
+    current_frame_length: Option<usize>,
+}
+impl LogReader {
+    fn find_start_marker(&mut self, log: &mut LogSession) -> Result<()> {
+        if matches!(log, LogSession::Rtt { .. }) {
+            return Ok(());
+        }
+        let mut search_buf = vec![];
+        let mut read_buf = [0u8; 1024];
+        let mut current_pos = 0;
+        loop {
+            let len = log.read(&mut read_buf)?;
+            search_buf.extend_from_slice(&read_buf[..len]);
+            if current_pos + 9 < search_buf.len() {
+                if &search_buf[current_pos..current_pos + 9] == b"LOG_START" {
+                    if current_pos + 9 < search_buf.len() {
+                        self.buf.extend_from_slice(&search_buf[current_pos + 9..]);
+                    }
+                    return Ok(());
+                }
+                current_pos += 1;
+            }
+        }
+    }
+
+    fn read(&mut self, log: &mut LogSession) -> Result<()> {
+        let mut buf = [0u8; 1024];
+        let len = log.read(&mut buf)?;
+        self.buf.extend_from_slice(&buf[..len]);
+        Ok(())
+    }
+
+    fn frame(&mut self) -> Result<Option<(usize, Vec<u8>)>> {
+        if self.current_frame_length.is_none() && self.buf.len() >= 2 {
+            self.current_frame_length = Some(self.buf[0] as usize);
+        }
+        if let Some(length) = self.current_frame_length {
+            if length + 1 < self.buf.len() {
+                let mut frame = self.buf.split_off(length + 1);
+                std::mem::swap(&mut self.buf, &mut frame);
+                self.current_frame_length = None;
+                return Ok(Some((frame[1] as usize, frame[2..].to_vec())));
+            }
+        }
+        Ok(None)
+    }
 }

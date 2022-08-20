@@ -17,8 +17,6 @@ pub use rv64::*;
 pub use abi;
 
 mod defmt_logger;
-#[cfg(feature = "fmt-log")]
-mod fmt_log;
 
 #[cfg(feature = "fmt-log")]
 pub use fmt_log::*;
