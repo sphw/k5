@@ -25,9 +25,9 @@ pub(crate) fn start_root_task(_task: &Task, tcb: &Tcb) -> ! {
     unsafe {
         asm!(
             "
-            csrw mscratch, a0
+            csrrw a0, mscratch, a0
             sd sp,  32*8(a0)
-            csrw mscratch, a0
+            csrrw a0, mscratch, a0
             ld sp, ({sp})
             mret
             ",
