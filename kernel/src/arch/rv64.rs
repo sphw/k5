@@ -37,9 +37,9 @@ pub(crate) fn start_root_task(_task: &Task, tcb: &Tcb) -> ! {
     };
 }
 
-pub(crate) fn init_tcb_stack(_task: &Task, tcb: &mut Tcb) {
-    tcb.saved_state = SavedThreadState::default();
-    //let stack_addr = tcb.stack_pointer - mem::size_of::<ExceptionFrame>();
+pub(crate) fn init_tcb_stack(task: &Task, tcb: &mut Tcb) {
+    tcb.saved_state.sp = tcb.stack_pointer as u64;
+    tcb.saved_state.pc = tcb.entrypoint as u64;
 }
 
 pub(crate) fn init_kernel<'k, 't>(tasks: &'t [crate::TaskDesc]) -> &'k mut crate::Kernel {
