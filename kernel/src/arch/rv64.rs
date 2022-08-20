@@ -69,6 +69,7 @@ pub fn log(bytes: &[u8]) {
 }
 
 #[derive(Default)]
+#[repr(C)]
 pub struct SavedThreadState {
     ra: u64,
     sp: u64,
@@ -176,12 +177,15 @@ unsafe fn trap_handler(index: SyscallIndex) {
 }
 
 #[inline]
-pub(crate) fn switch_thread(kernel: &Kernel, tcb_ref: ThreadRef) {
-    let tcb = kernel.scheduler.get_tcb(tcb_ref).unwrap();
-    let task = kernel.task(tcb.task).unwrap();
-    //apply_region_table(&task.region_table);
+pub(crate) fn switch_thread(kernel: &mut Kernel, tcb_ref: ThreadRef) {
+    let current_tcb = unsafe { get_current_tcb() };
+    let tcb = kernel.scheduler.get_tcb_mut(tcb_ref).unwrap();
+    tcb.saved_state.mpc = current_tcb.saved_state.mpc;
+    let task = tcb.task;
     // Safety: The TCB comes from the kernel which is stored statically so this is safe
     unsafe { set_current_tcb(tcb) }
+    let task = kernel.task(task).unwrap();
+    //apply_region_table(&task.region_table);
 }
 
 #[no_mangle]
