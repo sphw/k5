@@ -1,0 +1,1909 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0        0     1 PROVIDE ( _stext = ORIGIN ( REGION_TEXT ) )
+               0                0        0     1 PROVIDE ( _stack_start = ORIGIN ( REGION_STACK ) + LENGTH ( REGION_STACK ) )
+               0                0        0     1 PROVIDE ( _heap_size = 0 )
+        40040000         40040000        0     1 .text.dummy
+        40040000         40040000        0     1         . = ABSOLUTE ( _stext )
+        40040000         40040000     1300     2 .text
+        40040000         40040000        0     1         . = ALIGN ( 4 )
+        40040000         40040000       4c     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text.start)
+        40040000         40040000        0     1                 
+        40040000         40040000        0     1                 
+        40040000         40040000        0     1                 
+        40040000         40040000        0     1                 .Lpcrel_hi0
+        40040000         40040000        0     1                 
+        40040000         40040000       4c     1                 _start
+        40040008         40040008        0     1                 .Lpcrel_hi1
+        40040010         40040010        0     1                 .Lpcrel_hi2
+        4004002a         4004002a        0     1                 .Lpcrel_hi3
+        40040032         40040032        0     1                 .Lpcrel_hi4
+        4004004c         4004004c        0     1                 
+        4004004c         4004004c        0     1                 
+        4004004c         4004004c        0     1                 
+        4004004c         4004004c       2e     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3fmt5Write9write_fmt17h9cad61972a52bb4eE)
+        4004004c         4004004c       2e     1                 core::fmt::Write::write_fmt::h9cad61972a52bb4e
+        4004004c         4004004c        0     1                 
+        4004004c         4004004c        0     1                 
+        4004004c         4004004c        0     1                 
+        4004004e         4004004e        0     1                 
+        40040050         40040050        0     1                 
+        40040052         40040052        0     1                 
+        40040054         40040054        0     1                 
+        40040060         40040060        0     1                 
+        40040060         40040060        0     1                 .LBB0_1
+        40040060         40040060        0     1                 
+        40040074         40040074        0     1                 
+        4004007a         4004007a        0     1                 
+        4004007a         4004007a        0     1                 
+        4004007a         4004007a        0     1                 
+        4004007a         4004007a        2     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3ptr52drop_in_place$LT$$RF$mut$u20$userspace..LenWrite$GT$17h89b37a47e9556a30E)
+        4004007a         4004007a        2     1                 core::ptr::drop_in_place$LT$$RF$mut$u20$userspace..LenWrite$GT$::h89b37a47e9556a30
+        4004007a         4004007a        0     1                 
+        4004007a         4004007a        0     1                 
+        4004007a         4004007a        0     1                 
+        4004007a         4004007a        0     1                 
+        4004007c         4004007c        0     1                 
+        4004007c         4004007c        0     1                 
+        4004007c         4004007c        0     1                 
+        4004007c         4004007c       e4     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN50_$LT$$RF$mut$u20$W$u20$as$u20$core..fmt..Write$GT$10write_char17h9b43ab0d741dee1cE)
+        4004007c         4004007c       e4     1                 _$LT$$RF$mut$u20$W$u20$as$u20$core..fmt..Write$GT$::write_char::h9b43ab0d741dee1c
+        4004007c         4004007c        0     1                 
+        4004007c         4004007c        0     1                 
+        4004007c         4004007c        0     1                 
+        4004007e         4004007e        0     1                 
+        4004007e         4004007e        0     1                 
+        40040084         40040084        0     1                 
+        4004008a         4004008a        0     1                 
+        4004008a         4004008a        0     1                 
+        4004008e         4004008e        0     1                 
+        4004008e         4004008e        0     1                 
+        40040090         40040090        0     1                 
+        40040090         40040090        0     1                 
+        40040094         40040094        0     1                 
+        40040094         40040094        0     1                 
+        4004009c         4004009c        0     1                 
+        4004009c         4004009c        0     1                 
+        400400a2         400400a2        0     1                 
+        400400a2         400400a2        0     1                 
+        400400a6         400400a6        0     1                 
+        400400ae         400400ae        0     1                 
+        400400b2         400400b2        0     1                 
+        400400be         400400be        0     1                 
+        400400be         400400be        0     1                 
+        400400c2         400400c2        0     1                 
+        400400c4         400400c4        0     1                 
+        400400c4         400400c4        0     1                 
+        400400ce         400400ce        0     1                 
+        400400d6         400400d6        0     1                 
+        400400da         400400da        0     1                 
+        400400e2         400400e2        0     1                 
+        400400e6         400400e6        0     1                 
+        400400f2         400400f2        0     1                 
+        400400f8         400400f8        0     1                 
+        400400fe         400400fe        0     1                 
+        40040106         40040106        0     1                 
+        4004010c         4004010c        0     1                 
+        40040114         40040114        0     1                 
+        40040118         40040118        0     1                 
+        40040120         40040120        0     1                 
+        40040124         40040124        0     1                 
+        4004012e         4004012e        0     1                 
+        4004012e         4004012e        0     1                 
+        40040130         40040130        0     1                 
+        40040130         40040130        0     1                 
+        40040138         40040138        0     1                 
+        40040138         40040138        0     1                 
+        40040144         40040144        0     1                 
+        40040146         40040146        0     1                 
+        40040146         40040146        0     1                 
+        40040148         40040148        0     1                 
+        40040148         40040148        0     1                 
+        40040152         40040152        0     1                 
+        40040152         40040152        0     1                 
+        40040154         40040154        0     1                 
+        40040154         40040154        0     1                 
+        40040160         40040160        0     1                 
+        40040160         40040160        0     1                 
+        40040160         40040160        0     1                 
+        40040160         40040160       2a     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN50_$LT$$RF$mut$u20$W$u20$as$u20$core..fmt..Write$GT$9write_fmt17h7804ca5361461ab1E)
+        40040160         40040160       2a     1                 _$LT$$RF$mut$u20$W$u20$as$u20$core..fmt..Write$GT$::write_fmt::h7804ca5361461ab1
+        40040160         40040160        0     1                 
+        40040160         40040160        0     1                 
+        40040160         40040160        0     1                 
+        40040162         40040162        0     1                 
+        40040162         40040162        0     1                 
+        40040166         40040166        0     1                 
+        40040168         40040168        0     1                 
+        4004016a         4004016a        0     1                 
+        40040176         40040176        0     1                 
+        40040176         40040176        0     1                 
+        40040182         40040182        0     1                 
+        4004018a         4004018a        0     1                 
+        4004018a         4004018a        0     1                 
+        4004018a         4004018a        0     1                 
+        4004018a         4004018a       3a     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN50_$LT$$RF$mut$u20$W$u20$as$u20$core..fmt..Write$GT$9write_str17he516866fe0f67836E)
+        4004018a         4004018a       3a     1                 _$LT$$RF$mut$u20$W$u20$as$u20$core..fmt..Write$GT$::write_str::he516866fe0f67836
+        4004018a         4004018a        0     1                 
+        4004018a         4004018a        0     1                 
+        4004018a         4004018a        0     1                 
+        4004018c         4004018c        0     1                 
+        4004018c         4004018c        0     1                 
+        40040192         40040192        0     1                 
+        40040194         40040194        0     1                 
+        40040194         40040194        0     1                 
+        40040196         40040196        0     1                 
+        40040196         40040196        0     1                 
+        4004019e         4004019e        0     1                 
+        4004019e         4004019e        0     1                 
+        400401aa         400401aa        0     1                 
+        400401ac         400401ac        0     1                 
+        400401ac         400401ac        0     1                 
+        400401ae         400401ae        0     1                 
+        400401ae         400401ae        0     1                 
+        400401b6         400401b6        0     1                 
+        400401b6         400401b6        0     1                 
+        400401b8         400401b8        0     1                 
+        400401b8         400401b8        0     1                 
+        400401c4         400401c4        0     1                 
+        400401c4         400401c4        0     1                 
+        400401c4         400401c4        0     1                 
+        400401c4         400401c4        4     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3ops8function6FnOnce9call_once17h13a02a324c7315faE)
+        400401c4         400401c4        4     1                 core::ops::function::FnOnce::call_once::h13a02a324c7315fa
+        400401c4         400401c4        0     1                 
+        400401c4         400401c4        0     1                 
+        400401c4         400401c4        0     1                 
+        400401c4         400401c4        0     1                 
+        400401c6         400401c6        0     1                 
+        400401c6         400401c6        0     1                 
+        400401c8         400401c8        0     1                 
+        400401c8         400401c8        0     1                 
+        400401c8         400401c8        0     1                 
+        400401c8         400401c8        0     1                 
+        400401c8         400401c8       2e     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text.unlikely._ZN4core9panicking9panic_fmt17h2a2feab7b8a0b99fE)
+        400401c8         400401c8       2e     1                 core::panicking::panic_fmt::h2a2feab7b8a0b99f
+        400401c8         400401c8        0     1                 
+        400401c8         400401c8        0     1                 
+        400401c8         400401c8        0     1                 
+        400401ca         400401ca        0     1                 
+        400401ca         400401ca        0     1                 
+        400401ca         400401ca        0     1                 
+        400401cc         400401cc        0     1                 
+        400401cc         400401cc        0     1                 .LBB6_1
+        400401d6         400401d6        0     1                 .LBB6_2
+        400401ea         400401ea        0     1                 
+        400401ea         400401ea        0     1                 
+        400401f6         400401f6        0     1                 
+        400401f6         400401f6        0     1                 
+        400401f6         400401f6        0     1                 
+        400401f6         400401f6        2     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3ptr102drop_in_place$LT$$RF$core..iter..adapters..copied..Copied$LT$core..slice..iter..Iter$LT$u8$GT$$GT$$GT$17h3b8a07e89c9557b8E)
+        400401f6         400401f6        2     1                 core::ptr::drop_in_place$LT$$RF$core..iter..adapters..copied..Copied$LT$core..slice..iter..Iter$LT$u8$GT$$GT$$GT$::h3b8a07e89c9557b8
+        400401f6         400401f6        0     1                 
+        400401f6         400401f6        0     1                 
+        400401f6         400401f6        0     1                 
+        400401f6         400401f6        0     1                 
+        400401f8         400401f8        0     1                 
+        400401f8         400401f8        0     1                 
+        400401f8         400401f8        0     1                 
+        400401f8         400401f8        c     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN36_$LT$T$u20$as$u20$core..any..Any$GT$7type_id17h4a0eb0a825ab96d4E)
+        400401f8         400401f8        c     1                 _$LT$T$u20$as$u20$core..any..Any$GT$::type_id::h4a0eb0a825ab96d4
+        400401f8         400401f8        0     1                 
+        400401f8         400401f8        0     1                 
+        400401f8         400401f8        0     1                 .LBB8_1
+        400401f8         400401f8        0     1                 
+        40040202         40040202        0     1                 
+        40040204         40040204        0     1                 
+        40040204         40040204        0     1                 
+        40040204         40040204        0     1                 
+        40040204         40040204        a     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3fmt3num3imp52_$LT$impl$u20$core..fmt..Display$u20$for$u20$u64$GT$3fmt17ha2f1fab428267306E)
+        40040204         40040204        a     1                 core::fmt::num::imp::_$LT$impl$u20$core..fmt..Display$u20$for$u20$u64$GT$::fmt::ha2f1fab428267306
+        40040204         40040204        0     1                 
+        40040204         40040204        0     1                 
+        40040204         40040204        0     1                 
+        40040204         40040204        0     1                 
+        40040206         40040206        0     1                 
+        40040206         40040206        0     1                 
+        4004020e         4004020e        0     1                 
+        4004020e         4004020e        0     1                 
+        4004020e         4004020e        0     1                 
+        4004020e         4004020e      15e     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3fmt3num3imp7fmt_u6417hcd7b81d264019942E)
+        4004020e         4004020e      15e     1                 core::fmt::num::imp::fmt_u64::hcd7b81d264019942
+        4004020e         4004020e        0     1                 
+        4004020e         4004020e        0     1                 
+        4004020e         4004020e        0     1                 
+        40040210         40040210        0     1                 
+        40040214         40040214        0     1                 
+        40040216         40040216        0     1                 
+        40040222         40040222        0     1                 .LBB10_10
+        40040222         40040222        0     1                 
+        4004022a         4004022a        0     1                 
+        4004022e         4004022e        0     1                 
+        40040232         40040232        0     1                 
+        40040236         40040236        0     1                 
+        40040238         40040238        0     1                 
+        4004023c         4004023c        0     1                 
+        40040244         40040244        0     1                 
+        40040244         40040244        0     1                 
+        40040246         40040246        0     1                 
+        40040246         40040246        0     1                 
+        40040250         40040250        0     1                 
+        40040252         40040252        0     1                 .LBB10_11
+        4004027c         4004027c        0     1                 
+        40040288         40040288        0     1                 
+        400402a2         400402a2        0     1                 
+        400402a6         400402a6        0     1                 
+        400402a6         400402a6        0     1                 
+        400402a8         400402a8        0     1                 
+        400402a8         400402a8        0     1                 
+        400402b4         400402b4        0     1                 
+        400402b4         400402b4        0     1                 
+        400402b6         400402b6        0     1                 
+        400402b6         400402b6        0     1                 
+        400402be         400402be        0     1                 
+        400402be         400402be        0     1                 
+        400402c6         400402c6        0     1                 
+        400402c6         400402c6        0     1                 
+        400402ce         400402ce        0     1                 
+        400402ce         400402ce        0     1                 
+        400402d4         400402d4        0     1                 
+        400402e0         400402e0        0     1                 
+        400402fc         400402fc        0     1                 
+        40040300         40040300        0     1                 
+        40040302         40040302        0     1                 
+        40040302         40040302        0     1                 
+        40040304         40040304        0     1                 
+        40040304         40040304        0     1                 
+        40040310         40040310        0     1                 
+        40040310         40040310        0     1                 
+        40040312         40040312        0     1                 
+        40040312         40040312        0     1                 
+        4004031e         4004031e        0     1                 
+        4004031e         4004031e        0     1                 
+        40040322         40040322        0     1                 
+        40040324         40040324        0     1                 
+        40040328         40040328        0     1                 
+        40040328         40040328        0     1                 
+        4004032a         4004032a        0     1                 
+        4004032a         4004032a        0     1                 
+        40040336         40040336        0     1                 
+        40040336         40040336        0     1                 
+        40040338         40040338        0     1                 
+        40040338         40040338        0     1                 
+        40040340         40040340        0     1                 
+        40040340         40040340        0     1                 
+        40040344         40040344        0     1                 
+        40040344         40040344        0     1                 
+        4004034c         4004034c        0     1                 
+        4004034c         4004034c        0     1                 
+        40040350         40040350        0     1                 .LBB10_12
+        40040350         40040350        0     1                 
+        40040364         40040364        0     1                 
+        4004036c         4004036c        0     1                 
+        4004036c         4004036c        0     1                 
+        4004036c         4004036c        0     1                 
+        4004036c         4004036c      1e8     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3fmt9Formatter12pad_integral17ha6201ac6ac5e9f85E)
+        4004036c         4004036c      1e8     1                 core::fmt::Formatter::pad_integral::ha6201ac6ac5e9f85
+        4004036c         4004036c        0     1                 
+        4004036c         4004036c        0     1                 
+        4004036c         4004036c        0     1                 
+        4004036e         4004036e        0     1                 
+        40040388         40040388        0     1                 
+        4004038a         4004038a        0     1                 
+        4004038a         4004038a        0     1                 
+        4004039e         4004039e        0     1                 
+        4004039e         4004039e        0     1                 
+        400403a0         400403a0        0     1                 
+        400403a4         400403a4        0     1                 
+        400403a4         400403a4        0     1                 
+        400403a8         400403a8        0     1                 
+        400403a8         400403a8        0     1                 
+        400403ac         400403ac        0     1                 
+        400403ae         400403ae        0     1                 
+        400403b0         400403b0        0     1                 
+        400403b2         400403b2        0     1                 
+        400403b6         400403b6        0     1                 
+        400403b8         400403b8        0     1                 
+        400403b8         400403b8        0     1                 
+        400403bc         400403bc        0     1                 
+        400403bc         400403bc        0     1                 
+        400403c0         400403c0        0     1                 
+        400403c4         400403c4        0     1                 
+        400403c4         400403c4        0     1                 
+        400403c6         400403c6        0     1                 
+        400403c6         400403c6        0     1                 
+        400403ce         400403ce        0     1                 
+        400403ce         400403ce        0     1                 
+        400403d0         400403d0        0     1                 
+        400403d0         400403d0        0     1                 
+        400403d2         400403d2        0     1                 
+        400403d2         400403d2        0     1                 
+        400403d4         400403d4        0     1                 
+        400403d4         400403d4        0     1                 
+        400403d6         400403d6        0     1                 
+        400403d8         400403d8        0     1                 
+        400403da         400403da        0     1                 
+        400403de         400403de        0     1                 
+        400403e2         400403e2        0     1                 
+        400403e2         400403e2        0     1                 
+        400403e4         400403e4        0     1                 
+        400403e4         400403e4        0     1                 
+        400403e6         400403e6        0     1                 
+        400403e6         400403e6        0     1                 
+        400403f2         400403f2        0     1                 
+        400403f4         400403f4        0     1                 
+        400403f8         400403f8        0     1                 
+        400403f8         400403f8        0     1                 
+        40040400         40040400        0     1                 
+        40040400         40040400        0     1                 
+        40040404         40040404        0     1                 
+        40040404         40040404        0     1                 
+        40040422         40040422        0     1                 
+        40040442         40040442        0     1                 
+        40040468         40040468        0     1                 
+        40040468         40040468        0     1                 
+        4004046e         4004046e        0     1                 
+        4004046e         4004046e        0     1                 
+        40040472         40040472        0     1                 
+        40040472         40040472        0     1                 
+        4004047c         4004047c        0     1                 
+        4004047c         4004047c        0     1                 
+        40040480         40040480        0     1                 
+        40040480         40040480        0     1                 
+        40040484         40040484        0     1                 
+        40040484         40040484        0     1                 
+        40040498         40040498        0     1                 
+        4004049a         4004049a        0     1                 
+        4004049a         4004049a        0     1                 
+        400404a2         400404a2        0     1                 
+        400404a2         400404a2        0     1                 
+        400404a4         400404a4        0     1                 
+        400404a4         400404a4        0     1                 
+        400404a6         400404a6        0     1                 
+        400404a6         400404a6        0     1                 
+        400404b6         400404b6        0     1                 
+        400404b6         400404b6        0     1                 
+        400404bc         400404bc        0     1                 
+        400404bc         400404bc        0     1                 
+        400404c0         400404c0        0     1                 
+        400404c2         400404c2        0     1                 
+        400404c6         400404c6        0     1                 
+        400404d0         400404d0        0     1                 
+        400404d4         400404d4        0     1                 
+        400404d4         400404d4        0     1                 
+        400404d6         400404d6        0     1                 
+        400404d6         400404d6        0     1                 
+        400404d8         400404d8        0     1                 
+        400404d8         400404d8        0     1                 
+        400404e4         400404e4        0     1                 
+        400404e4         400404e4        0     1                 
+        400404ee         400404ee        0     1                 
+        400404f2         400404f2        0     1                 
+        40040506         40040506        0     1                 
+        40040514         40040514        0     1                 
+        4004051a         4004051a        0     1                 
+        4004051a         4004051a        0     1                 
+        4004051e         4004051e        0     1                 
+        4004051e         4004051e        0     1                 
+        40040520         40040520        0     1                 
+        40040520         40040520        0     1                 
+        4004052e         4004052e        0     1                 
+        4004052e         4004052e        0     1                 
+        4004053e         4004053e        0     1                 
+        40040540         40040540        0     1                 
+        40040544         40040544        0     1                 
+        4004054c         4004054c        0     1                 
+        4004054e         4004054e        0     1                 
+        4004054e         4004054e        0     1                 
+        40040554         40040554        0     1                 
+        40040554         40040554        0     1                 
+        40040554         40040554        0     1                 
+        40040554         40040554        0     1                 
+        40040554         40040554       56     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3fmt9Formatter12pad_integral12write_prefix17hef7d4c457ba05dd1E)
+        40040554         40040554       56     1                 core::fmt::Formatter::pad_integral::write_prefix::hef7d4c457ba05dd1
+        40040554         40040554        0     1                 
+        40040554         40040554        0     1                 
+        40040554         40040554        0     1                 
+        40040556         40040556        0     1                 
+        40040560         40040560        0     1                 
+        40040570         40040570        0     1                 
+        40040574         40040574        0     1                 
+        40040582         40040582        0     1                 
+        40040584         40040584        0     1                 
+        4004059a         4004059a        0     1                 
+        4004059c         4004059c        0     1                 
+        400405aa         400405aa        0     1                 
+        400405aa         400405aa        0     1                 
+        400405aa         400405aa        0     1                 
+        400405aa         400405aa        e     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text.unlikely._ZN4core5slice5index26slice_start_index_len_fail17h9fef55a47128cbc6E)
+        400405aa         400405aa        e     1                 core::slice::index::slice_start_index_len_fail::h9fef55a47128cbc6
+        400405aa         400405aa        0     1                 
+        400405aa         400405aa        0     1                 
+        400405aa         400405aa        0     1                 
+        400405ac         400405ac        0     1                 
+        400405ac         400405ac        0     1                 
+        400405ac         400405ac        0     1                 
+        400405ae         400405ae        0     1                 
+        400405b8         400405b8        0     1                 
+        400405b8         400405b8        0     1                 
+        400405b8         400405b8        0     1                 
+        400405b8         400405b8        0     1                 
+        400405b8         400405b8        e     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3ops8function6FnOnce9call_once17hd83ae3b3196ac0daE)
+        400405b8         400405b8        e     1                 core::ops::function::FnOnce::call_once::hd83ae3b3196ac0da
+        400405b8         400405b8        0     1                 
+        400405b8         400405b8        0     1                 
+        400405b8         400405b8        0     1                 
+        400405ba         400405ba        0     1                 
+        400405ba         400405ba        0     1                 
+        400405bc         400405bc        0     1                 
+        400405c6         400405c6        0     1                 
+        400405c6         400405c6        0     1                 
+        400405c6         400405c6        0     1                 
+        400405c6         400405c6       4a     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core5slice5index29slice_start_index_len_fail_rt17ha9d4891aa8496f0fE)
+        400405c6         400405c6       4a     1                 core::slice::index::slice_start_index_len_fail_rt::ha9d4891aa8496f0f
+        400405c6         400405c6        0     1                 
+        400405c6         400405c6        0     1                 
+        400405c6         400405c6        0     1                 
+        400405c8         400405c8        0     1                 
+        400405ca         400405ca        0     1                 
+        400405d4         400405d4        0     1                 
+        400405d6         400405d6        0     1                 .LBB15_1
+        400405e6         400405e6        0     1                 .LBB15_2
+        400405e6         400405e6        0     1                 
+        400405e6         400405e6        0     1                 
+        400405fc         400405fc        0     1                 
+        400405fc         400405fc        0     1                 .LBB15_3
+        400405fc         400405fc        0     1                 
+        40040610         40040610        0     1                 
+        40040610         40040610        0     1                 
+        40040610         40040610        0     1                 
+        40040610         40040610        e     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text.unlikely._ZN4core5slice5index24slice_end_index_len_fail17h2db1e06274e604e5E)
+        40040610         40040610        e     1                 core::slice::index::slice_end_index_len_fail::h2db1e06274e604e5
+        40040610         40040610        0     1                 
+        40040610         40040610        0     1                 
+        40040610         40040610        0     1                 
+        40040612         40040612        0     1                 
+        40040612         40040612        0     1                 
+        40040612         40040612        0     1                 
+        40040614         40040614        0     1                 
+        4004061e         4004061e        0     1                 
+        4004061e         4004061e        0     1                 
+        4004061e         4004061e        0     1                 
+        4004061e         4004061e        0     1                 
+        4004061e         4004061e        e     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3ops8function6FnOnce9call_once17h38fbd718cdfb908cE)
+        4004061e         4004061e        e     1                 core::ops::function::FnOnce::call_once::h38fbd718cdfb908c
+        4004061e         4004061e        0     1                 
+        4004061e         4004061e        0     1                 
+        4004061e         4004061e        0     1                 
+        40040620         40040620        0     1                 
+        40040620         40040620        0     1                 
+        40040622         40040622        0     1                 
+        4004062c         4004062c        0     1                 
+        4004062c         4004062c        0     1                 
+        4004062c         4004062c        0     1                 
+        4004062c         4004062c       4a     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core5slice5index27slice_end_index_len_fail_rt17hd79a2e0ec99f6ec4E)
+        4004062c         4004062c       4a     1                 core::slice::index::slice_end_index_len_fail_rt::hd79a2e0ec99f6ec4
+        4004062c         4004062c        0     1                 
+        4004062c         4004062c        0     1                 
+        4004062c         4004062c        0     1                 
+        4004062e         4004062e        0     1                 
+        40040630         40040630        0     1                 
+        4004063a         4004063a        0     1                 
+        4004063c         4004063c        0     1                 .LBB18_1
+        4004064c         4004064c        0     1                 .LBB18_2
+        4004064c         4004064c        0     1                 
+        4004064c         4004064c        0     1                 
+        40040662         40040662        0     1                 
+        40040662         40040662        0     1                 .LBB18_3
+        40040662         40040662        0     1                 
+        40040676         40040676        0     1                 
+        40040676         40040676        0     1                 
+        40040676         40040676        0     1                 
+        40040676         40040676      3dc     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3fmt9Formatter3pad17hb3f3692cd5a4e238E)
+        40040676         40040676      3dc     1                 core::fmt::Formatter::pad::hb3f3692cd5a4e238
+        40040676         40040676        0     1                 
+        40040676         40040676        0     1                 
+        40040676         40040676        0     1                 
+        40040678         40040678        0     1                 
+        40040678         40040678        0     1                 
+        40040678         40040678        0     1                 
+        4004068a         4004068a        0     1                 
+        4004068e         4004068e        0     1                 
+        4004068e         4004068e        0     1                 
+        40040690         40040690        0     1                 
+        40040690         40040690        0     1                 
+        40040698         40040698        0     1                 
+        40040698         40040698        0     1                 
+        400406aa         400406aa        0     1                 
+        400406ac         400406ac        0     1                 
+        400406b0         400406b0        0     1                 
+        400406b4         400406b4        0     1                 
+        400406b4         400406b4        0     1                 
+        400406b8         400406b8        0     1                 
+        400406b8         400406b8        0     1                 
+        400406cc         400406cc        0     1                 
+        400406cc         400406cc        0     1                 
+        400406d0         400406d0        0     1                 
+        400406d0         400406d0        0     1                 
+        400406d2         400406d2        0     1                 
+        400406d6         400406d6        0     1                 
+        400406d6         400406d6        0     1                 
+        400406da         400406da        0     1                 
+        400406da         400406da        0     1                 
+        400406dc         400406dc        0     1                 
+        400406dc         400406dc        0     1                 
+        400406de         400406de        0     1                 
+        400406de         400406de        0     1                 
+        400406e2         400406e2        0     1                 
+        400406e2         400406e2        0     1                 
+        400406ea         400406ea        0     1                 
+        400406ee         400406ee        0     1                 
+        400406f2         400406f2        0     1                 
+        400406f2         400406f2        0     1                 
+        400406f6         400406f6        0     1                 
+        400406f6         400406f6        0     1                 
+        400406fa         400406fa        0     1                 
+        400406fa         400406fa        0     1                 
+        400406fe         400406fe        0     1                 
+        40040702         40040702        0     1                 
+        40040702         40040702        0     1                 
+        4004070c         4004070c        0     1                 
+        4004070c         4004070c        0     1                 
+        40040710         40040710        0     1                 
+        40040714         40040714        0     1                 
+        4004071a         4004071a        0     1                 
+        4004071a         4004071a        0     1                 
+        40040724         40040724        0     1                 
+        40040724         40040724        0     1                 
+        40040728         40040728        0     1                 
+        40040728         40040728        0     1                 
+        4004072c         4004072c        0     1                 
+        4004072c         4004072c        0     1                 
+        4004074c         4004074c        0     1                 
+        4004074c         4004074c        0     1                 
+        40040750         40040750        0     1                 
+        40040750         40040750        0     1                 
+        40040754         40040754        0     1                 
+        40040758         40040758        0     1                 
+        40040760         40040760        0     1                 
+        40040764         40040764        0     1                 
+        40040768         40040768        0     1                 
+        4004076c         4004076c        0     1                 
+        40040770         40040770        0     1                 
+        40040774         40040774        0     1                 
+        40040774         40040774        0     1                 
+        40040778         40040778        0     1                 
+        40040778         40040778        0     1                 
+        4004077c         4004077c        0     1                 
+        4004077c         4004077c        0     1                 
+        40040780         40040780        0     1                 
+        40040784         40040784        0     1                 
+        40040784         40040784        0     1                 
+        40040790         40040790        0     1                 
+        40040790         40040790        0     1                 
+        40040796         40040796        0     1                 
+        40040796         40040796        0     1                 
+        4004079a         4004079a        0     1                 
+        4004079a         4004079a        0     1                 
+        4004079c         4004079c        0     1                 
+        400407a0         400407a0        0     1                 
+        400407a0         400407a0        0     1                 
+        400407a4         400407a4        0     1                 
+        400407a4         400407a4        0     1                 
+        400407ac         400407ac        0     1                 
+        400407ac         400407ac        0     1                 
+        400407b0         400407b0        0     1                 
+        400407b0         400407b0        0     1                 
+        400407b2         400407b2        0     1                 
+        400407b2         400407b2        0     1                 
+        400407b6         400407b6        0     1                 
+        400407b6         400407b6        0     1                 
+        400407ba         400407ba        0     1                 
+        400407ba         400407ba        0     1                 
+        400407bc         400407bc        0     1                 
+        400407bc         400407bc        0     1                 
+        400407be         400407be        0     1                 
+        400407be         400407be        0     1                 
+        400407c2         400407c2        0     1                 
+        400407c6         400407c6        0     1                 
+        400407ce         400407ce        0     1                 
+        400407ce         400407ce        0     1                 
+        400407d2         400407d2        0     1                 
+        400407d4         400407d4        0     1                 
+        400407d4         400407d4        0     1                 
+        400407d8         400407d8        0     1                 
+        400407d8         400407d8        0     1                 
+        400407dc         400407dc        0     1                 
+        400407e0         400407e0        0     1                 
+        400407e0         400407e0        0     1                 
+        400407e2         400407e2        0     1                 
+        400407e2         400407e2        0     1                 
+        400407ea         400407ea        0     1                 
+        400407ea         400407ea        0     1                 
+        400407ec         400407ec        0     1                 
+        400407ec         400407ec        0     1                 
+        400407ee         400407ee        0     1                 
+        400407ee         400407ee        0     1                 
+        400407f2         400407f2        0     1                 
+        400407f2         400407f2        0     1                 
+        400407fa         400407fa        0     1                 
+        400407fe         400407fe        0     1                 
+        400407fe         400407fe        0     1                 
+        40040802         40040802        0     1                 
+        40040802         40040802        0     1                 
+        40040806         40040806        0     1                 
+        40040806         40040806        0     1                 
+        40040816         40040816        0     1                 
+        4004081c         4004081c        0     1                 
+        4004081c         4004081c        0     1                 
+        40040820         40040820        0     1                 
+        40040820         40040820        0     1                 
+        40040822         40040822        0     1                 
+        40040822         40040822        0     1                 
+        4004082a         4004082a        0     1                 
+        4004082a         4004082a        0     1                 
+        4004082c         4004082c        0     1                 
+        4004082c         4004082c        0     1                 
+        4004082e         4004082e        0     1                 
+        4004082e         4004082e        0     1                 
+        40040830         40040830        0     1                 
+        40040830         40040830        0     1                 
+        40040834         40040834        0     1                 
+        40040834         40040834        0     1                 
+        4004083c         4004083c        0     1                 
+        40040840         40040840        0     1                 
+        40040842         40040842        0     1                 
+        40040844         40040844        0     1                 
+        40040844         40040844        0     1                 
+        40040848         40040848        0     1                 
+        40040848         40040848        0     1                 
+        4004084a         4004084a        0     1                 
+        4004084c         4004084c        0     1                 
+        40040850         40040850        0     1                 
+        40040850         40040850        0     1                 
+        4004087a         4004087a        0     1                 
+        4004087a         4004087a        0     1                 
+        4004087e         4004087e        0     1                 
+        40040880         40040880        0     1                 
+        40040884         40040884        0     1                 
+        4004088e         4004088e        0     1                 
+        40040892         40040892        0     1                 
+        40040892         40040892        0     1                 
+        40040894         40040894        0     1                 
+        40040894         40040894        0     1                 
+        40040896         40040896        0     1                 
+        40040896         40040896        0     1                 
+        400408a2         400408a2        0     1                 
+        400408a2         400408a2        0     1                 
+        400408ac         400408ac        0     1                 
+        400408b0         400408b0        0     1                 
+        400408c0         400408c0        0     1                 
+        400408c2         400408c2        0     1                 
+        400408c2         400408c2        0     1                 
+        400408c6         400408c6        0     1                 
+        400408c6         400408c6        0     1                 
+        400408ca         400408ca        0     1                 
+        400408ca         400408ca        0     1                 
+        400408cc         400408cc        0     1                 
+        400408cc         400408cc        0     1                 
+        400408da         400408da        0     1                 
+        400408da         400408da        0     1                 
+        400408e0         400408e0        0     1                 
+        400408e0         400408e0        0     1                 
+        400408ea         400408ea        0     1                 
+        400408ea         400408ea        0     1                 
+        400408ee         400408ee        0     1                 
+        400408ee         400408ee        0     1                 
+        400408f0         400408f0        0     1                 
+        400408f0         400408f0        0     1                 
+        400408f8         400408f8        0     1                 
+        400408f8         400408f8        0     1                 
+        400408fa         400408fa        0     1                 
+        400408fa         400408fa        0     1                 
+        400408fc         400408fc        0     1                 
+        400408fc         400408fc        0     1                 
+        400408fe         400408fe        0     1                 
+        400408fe         400408fe        0     1                 
+        40040902         40040902        0     1                 
+        40040902         40040902        0     1                 
+        40040904         40040904        0     1                 
+        40040904         40040904        0     1                 
+        4004090a         4004090a        0     1                 
+        4004090e         4004090e        0     1                 
+        4004090e         4004090e        0     1                 
+        40040910         40040910        0     1                 
+        40040910         40040910        0     1                 
+        40040918         40040918        0     1                 
+        40040918         40040918        0     1                 
+        4004091a         4004091a        0     1                 
+        4004091a         4004091a        0     1                 
+        4004091c         4004091c        0     1                 
+        4004091c         4004091c        0     1                 
+        4004091e         4004091e        0     1                 
+        4004091e         4004091e        0     1                 
+        40040922         40040922        0     1                 .LBB19_79
+        4004092c         4004092c        0     1                 .LBB19_80
+        40040946         40040946        0     1                 
+        4004094a         4004094a        0     1                 
+        4004095a         4004095a        0     1                 
+        4004095a         4004095a        0     1                 
+        40040966         40040966        0     1                 
+        40040966         40040966        0     1                 
+        4004096a         4004096a        0     1                 
+        4004096a         4004096a        0     1                 
+        4004096c         4004096c        0     1                 
+        4004096c         4004096c        0     1                 
+        4004096e         4004096e        0     1                 
+        40040970         40040970        0     1                 
+        40040970         40040970        0     1                 
+        40040974         40040974        0     1                 
+        4004097e         4004097e        0     1                 
+        40040982         40040982        0     1                 
+        40040986         40040986        0     1                 
+        40040986         40040986        0     1                 
+        4004098a         4004098a        0     1                 
+        4004098a         4004098a        0     1                 
+        40040992         40040992        0     1                 
+        40040992         40040992        0     1                 
+        40040994         40040994        0     1                 
+        40040994         40040994        0     1                 
+        40040998         40040998        0     1                 
+        4004099a         4004099a        0     1                 
+        4004099c         4004099c        0     1                 
+        4004099c         4004099c        0     1                 
+        400409a4         400409a4        0     1                 
+        400409a4         400409a4        0     1                 
+        400409a6         400409a6        0     1                 
+        400409a6         400409a6        0     1                 
+        400409aa         400409aa        0     1                 
+        400409aa         400409aa        0     1                 
+        400409ac         400409ac        0     1                 
+        400409ac         400409ac        0     1                 
+        400409b6         400409b6        0     1                 
+        400409b6         400409b6        0     1                 
+        400409b8         400409b8        0     1                 
+        400409b8         400409b8        0     1                 
+        400409bc         400409bc        0     1                 
+        400409bc         400409bc        0     1                 
+        400409be         400409be        0     1                 
+        400409be         400409be        0     1                 
+        400409c8         400409c8        0     1                 
+        400409c8         400409c8        0     1                 
+        400409ca         400409ca        0     1                 
+        400409ca         400409ca        0     1                 
+        400409ce         400409ce        0     1                 
+        400409ce         400409ce        0     1                 
+        400409d0         400409d0        0     1                 
+        400409d0         400409d0        0     1                 
+        400409de         400409de        0     1                 
+        400409de         400409de        0     1                 
+        400409e2         400409e2        0     1                 
+        400409e2         400409e2        0     1                 
+        400409e4         400409e4        0     1                 
+        400409e4         400409e4        0     1                 
+        400409ea         400409ea        0     1                 
+        400409ea         400409ea        0     1                 
+        400409ee         400409ee        0     1                 
+        400409f2         400409f2        0     1                 
+        400409f6         400409f6        0     1                 
+        400409fc         400409fc        0     1                 
+        40040a02         40040a02        0     1                 
+        40040a02         40040a02        0     1                 
+        40040a06         40040a06        0     1                 
+        40040a06         40040a06        0     1                 
+        40040a08         40040a08        0     1                 
+        40040a08         40040a08        0     1                 
+        40040a14         40040a14        0     1                 
+        40040a14         40040a14        0     1                 
+        40040a16         40040a16        0     1                 
+        40040a16         40040a16        0     1                 
+        40040a18         40040a18        0     1                 
+        40040a18         40040a18        0     1                 
+        40040a1c         40040a1c        0     1                 
+        40040a1c         40040a1c        0     1                 
+        40040a1e         40040a1e        0     1                 
+        40040a1e         40040a1e        0     1                 
+        40040a22         40040a22        0     1                 
+        40040a22         40040a22        0     1                 
+        40040a3a         40040a3a        0     1                 
+        40040a3c         40040a3c        0     1                 
+        40040a3c         40040a3c        0     1                 
+        40040a48         40040a48        0     1                 
+        40040a48         40040a48        0     1                 
+        40040a4c         40040a4c        0     1                 
+        40040a4c         40040a4c        0     1                 
+        40040a4e         40040a4e        0     1                 
+        40040a4e         40040a4e        0     1                 
+        40040a52         40040a52        0     1                 
+        40040a52         40040a52        0     1                 
+        40040a52         40040a52        0     1                 
+        40040a52         40040a52        0     1                 
+        40040a52         40040a52       2c     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text.unlikely._ZN4core9panicking5panic17h70173a3d289347a1E)
+        40040a52         40040a52       2c     1                 core::panicking::panic::h70173a3d289347a1
+        40040a52         40040a52        0     1                 
+        40040a52         40040a52        0     1                 
+        40040a52         40040a52        0     1                 
+        40040a54         40040a54        0     1                 
+        40040a54         40040a54        0     1                 
+        40040a56         40040a56        0     1                 
+        40040a5c         40040a5c        0     1                 
+        40040a5c         40040a5c        0     1                 
+        40040a64         40040a64        0     1                 .LBB20_1
+        40040a70         40040a70        0     1                 
+        40040a70         40040a70        0     1                 
+        40040a7e         40040a7e        0     1                 
+        40040a7e         40040a7e        0     1                 
+        40040a7e         40040a7e        0     1                 
+        40040a7e         40040a7e       10     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN84_$LT$core..panicking..assert_matches_failed..Pattern$u20$as$u20$core..fmt..Debug$GT$3fmt17h0736623fc567019cE)
+        40040a7e         40040a7e       10     1                 _$LT$core..panicking..assert_matches_failed..Pattern$u20$as$u20$core..fmt..Debug$GT$::fmt::h0736623fc567019c
+        40040a7e         40040a7e        0     1                 
+        40040a7e         40040a7e        0     1                 
+        40040a7e         40040a7e        0     1                 
+        40040a7e         40040a7e        0     1                 
+        40040a84         40040a84        0     1                 
+        40040a84         40040a84        0     1                 
+        40040a8e         40040a8e        0     1                 
+        40040a8e         40040a8e        0     1                 
+        40040a8e         40040a8e        0     1                 
+        40040a8e         40040a8e        0     1                 
+        40040a8e         40040a8e      190     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3fmt5write17h382ed7cfb641333cE)
+        40040a8e         40040a8e      190     1                 core::fmt::write::h382ed7cfb641333c
+        40040a8e         40040a8e        0     1                 
+        40040a8e         40040a8e        0     1                 
+        40040a8e         40040a8e        0     1                 
+        40040a90         40040a90        0     1                 
+        40040aa0         40040aa0        0     1                 
+        40040aa6         40040aa6        0     1                 
+        40040aa6         40040aa6        0     1                 
+        40040aae         40040aae        0     1                 
+        40040aae         40040aae        0     1                 
+        40040ab2         40040ab2        0     1                 
+        40040ab2         40040ab2        0     1                 
+        40040aba         40040aba        0     1                 
+        40040aba         40040aba        0     1                 
+        40040abc         40040abc        0     1                 
+        40040ac0         40040ac0        0     1                 
+        40040ac0         40040ac0        0     1                 
+        40040ac4         40040ac4        0     1                 
+        40040ac8         40040ac8        0     1                 
+        40040ae6         40040ae6        0     1                 
+        40040ae6         40040ae6        0     1                 .LBB22_32
+        40040ae6         40040ae6        0     1                 
+        40040aee         40040aee        0     1                 
+        40040af0         40040af0        0     1                 
+        40040af2         40040af2        0     1                 
+        40040af6         40040af6        0     1                 
+        40040afa         40040afa        0     1                 
+        40040b02         40040b02        0     1                 
+        40040b02         40040b02        0     1                 
+        40040b04         40040b04        0     1                 
+        40040b06         40040b06        0     1                 
+        40040b0a         40040b0a        0     1                 
+        40040b0e         40040b0e        0     1                 
+        40040b10         40040b10        0     1                 
+        40040b10         40040b10        0     1                 
+        40040b14         40040b14        0     1                 
+        40040b14         40040b14        0     1                 
+        40040b16         40040b16        0     1                 
+        40040b1a         40040b1a        0     1                 
+        40040b1a         40040b1a        0     1                 
+        40040b1c         40040b1c        0     1                 
+        40040b1e         40040b1e        0     1                 
+        40040b22         40040b22        0     1                 
+        40040b22         40040b22        0     1                 
+        40040b26         40040b26        0     1                 
+        40040b26         40040b26        0     1                 
+        40040b28         40040b28        0     1                 
+        40040b28         40040b28        0     1                 
+        40040b2c         40040b2c        0     1                 
+        40040b2c         40040b2c        0     1                 
+        40040b30         40040b30        0     1                 
+        40040b32         40040b32        0     1                 
+        40040b32         40040b32        0     1                 
+        40040b34         40040b34        0     1                 
+        40040b34         40040b34        0     1                 
+        40040b36         40040b36        0     1                 
+        40040b3a         40040b3a        0     1                 
+        40040b42         40040b42        0     1                 
+        40040b42         40040b42        0     1                 
+        40040b44         40040b44        0     1                 
+        40040b46         40040b46        0     1                 
+        40040b4a         40040b4a        0     1                 
+        40040b4a         40040b4a        0     1                 
+        40040b4e         40040b4e        0     1                 
+        40040b4e         40040b4e        0     1                 
+        40040b50         40040b50        0     1                 
+        40040b50         40040b50        0     1                 
+        40040b54         40040b54        0     1                 
+        40040b54         40040b54        0     1                 
+        40040b58         40040b58        0     1                 
+        40040b5a         40040b5a        0     1                 
+        40040b5a         40040b5a        0     1                 
+        40040b5c         40040b5c        0     1                 
+        40040b5c         40040b5c        0     1                 
+        40040b5e         40040b5e        0     1                 
+        40040b62         40040b62        0     1                 
+        40040b66         40040b66        0     1                 
+        40040b66         40040b66        0     1                 
+        40040b6a         40040b6a        0     1                 
+        40040b6a         40040b6a        0     1                 
+        40040b6c         40040b6c        0     1                 
+        40040b6e         40040b6e        0     1                 
+        40040b72         40040b72        0     1                 
+        40040b72         40040b72        0     1                 
+        40040b74         40040b74        0     1                 
+        40040b74         40040b74        0     1                 
+        40040b84         40040b84        0     1                 
+        40040b84         40040b84        0     1                 
+        40040b88         40040b88        0     1                 
+        40040b88         40040b88        0     1                 
+        40040b8a         40040b8a        0     1                 
+        40040b92         40040b92        0     1                 
+        40040baa         40040baa        0     1                 
+        40040baa         40040baa        0     1                 
+        40040bac         40040bac        0     1                 
+        40040bae         40040bae        0     1                 
+        40040bb2         40040bb2        0     1                 
+        40040bb6         40040bb6        0     1                 
+        40040bbc         40040bbc        0     1                 
+        40040bbe         40040bbe        0     1                 
+        40040bc2         40040bc2        0     1                 
+        40040bc8         40040bc8        0     1                 
+        40040bc8         40040bc8        0     1                 
+        40040bd4         40040bd4        0     1                 
+        40040bd4         40040bd4        0     1                 
+        40040bd6         40040bd6        0     1                 
+        40040bda         40040bda        0     1                 
+        40040be0         40040be0        0     1                 
+        40040be2         40040be2        0     1                 
+        40040be6         40040be6        0     1                 
+        40040bea         40040bea        0     1                 
+        40040bee         40040bee        0     1                 
+        40040bee         40040bee        0     1                 
+        40040bf6         40040bf6        0     1                 
+        40040bf6         40040bf6        0     1                 
+        40040bfa         40040bfa        0     1                 
+        40040bfe         40040bfe        0     1                 
+        40040c04         40040c04        0     1                 
+        40040c0a         40040c0a        0     1                 
+        40040c1e         40040c1e        0     1                 
+        40040c1e         40040c1e        0     1                 
+        40040c1e         40040c1e        0     1                 
+        40040c1e         40040c1e        c     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3fmt3num3imp52_$LT$impl$u20$core..fmt..Display$u20$for$u20$u32$GT$3fmt17hc0d52b7c5e6b4493E)
+        40040c1e         40040c1e        c     1                 core::fmt::num::imp::_$LT$impl$u20$core..fmt..Display$u20$for$u20$u32$GT$::fmt::hc0d52b7c5e6b4493
+        40040c1e         40040c1e        0     1                 
+        40040c1e         40040c1e        0     1                 
+        40040c1e         40040c1e        0     1                 
+        40040c1e         40040c1e        0     1                 
+        40040c22         40040c22        0     1                 
+        40040c22         40040c22        0     1                 
+        40040c2a         40040c2a        0     1                 
+        40040c2a         40040c2a        0     1                 
+        40040c2a         40040c2a        0     1                 
+        40040c2a         40040c2a       32     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN44_$LT$$RF$T$u20$as$u20$core..fmt..Display$GT$3fmt17hf0c5c6a62a517889E)
+        40040c2a         40040c2a       32     1                 _$LT$$RF$T$u20$as$u20$core..fmt..Display$GT$::fmt::hf0c5c6a62a517889
+        40040c2a         40040c2a        0     1                 
+        40040c2a         40040c2a        0     1                 
+        40040c2a         40040c2a        0     1                 
+        40040c2c         40040c2c        0     1                 
+        40040c2c         40040c2c        0     1                 
+        40040c2e         40040c2e        0     1                 
+        40040c30         40040c30        0     1                 
+        40040c30         40040c30        0     1                 
+        40040c42         40040c42        0     1                 
+        40040c44         40040c44        0     1                 
+        40040c48         40040c48        0     1                 
+        40040c4a         40040c4a        0     1                 
+        40040c4c         40040c4c        0     1                 
+        40040c56         40040c56        0     1                 
+        40040c56         40040c56        0     1                 
+        40040c5c         40040c5c        0     1                 
+        40040c5c         40040c5c        0     1                 
+        40040c5c         40040c5c        0     1                 
+        40040c5c         40040c5c       12     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN44_$LT$$RF$T$u20$as$u20$core..fmt..Display$GT$3fmt17h830479bfd545845fE)
+        40040c5c         40040c5c       12     1                 _$LT$$RF$T$u20$as$u20$core..fmt..Display$GT$::fmt::h830479bfd545845f
+        40040c5c         40040c5c        0     1                 
+        40040c5c         40040c5c        0     1                 
+        40040c5c         40040c5c        0     1                 
+        40040c5c         40040c5c        0     1                 
+        40040c5e         40040c5e        0     1                 
+        40040c5e         40040c5e        0     1                 
+        40040c64         40040c64        0     1                 
+        40040c64         40040c64        0     1                 
+        40040c6e         40040c6e        0     1                 
+        40040c6e         40040c6e        0     1                 
+        40040c6e         40040c6e        0     1                 
+        40040c6e         40040c6e        0     1                 
+        40040c6e         40040c6e       68     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN4core3fmt3num51_$LT$impl$u20$core..fmt..Binary$u20$for$u20$i32$GT$3fmt17ha5cbca65d12d2ec2E)
+        40040c6e         40040c6e       68     1                 core::fmt::num::_$LT$impl$u20$core..fmt..Binary$u20$for$u20$i32$GT$::fmt::ha5cbca65d12d2ec2
+        40040c6e         40040c6e        0     1                 
+        40040c6e         40040c6e        0     1                 
+        40040c6e         40040c6e        0     1                 
+        40040c70         40040c70        0     1                 
+        40040c70         40040c70        0     1                 
+        40040c72         40040c72        0     1                 
+        40040c7c         40040c7c        0     1                 
+        40040c7e         40040c7e        0     1                 
+        40040c7e         40040c7e        0     1                 
+        40040c86         40040c86        0     1                 
+        40040c86         40040c86        0     1                 
+        40040c8a         40040c8a        0     1                 
+        40040c8a         40040c8a        0     1                 
+        40040c8e         40040c8e        0     1                 
+        40040c8e         40040c8e        0     1                 
+        40040c92         40040c92        0     1                 
+        40040c92         40040c92        0     1                 
+        40040c98         40040c98        0     1                 
+        40040c98         40040c98        0     1                 
+        40040ca4         40040ca4        0     1                 
+        40040ca6         40040ca6        0     1                 
+        40040ca6         40040ca6        0     1                 
+        40040cac         40040cac        0     1                 
+        40040cac         40040cac        0     1                 
+        40040cb0         40040cb0        0     1                 .LBB26_5
+        40040cc6         40040cc6        0     1                 
+        40040cc6         40040cc6        0     1                 
+        40040ccc         40040ccc        0     1                 
+        40040ccc         40040ccc        0     1                 
+        40040cd6         40040cd6        0     1                 
+        40040cd6         40040cd6        0     1                 
+        40040cd6         40040cd6        0     1                 
+        40040cd6         40040cd6        0     1                 
+        40040cd6         40040cd6       1c     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN5defmt6export4istr17h744103b38ae658dbE)
+        40040cd6         40040cd6       1c     1                 defmt::export::istr::h744103b38ae658db
+        40040cd6         40040cd6        0     1                 
+        40040cd6         40040cd6        0     1                 
+        40040cd6         40040cd6        0     1                 
+        40040cd8         40040cd8        0     1                 
+        40040cd8         40040cd8        0     1                 
+        40040cda         40040cda        0     1                 
+        40040cde         40040cde        0     1                 
+        40040cde         40040cde        0     1                 
+        40040cec         40040cec        0     1                 
+        40040cec         40040cec        0     1                 
+        40040cf2         40040cf2        0     1                 
+        40040cf2         40040cf2        0     1                 
+        40040cf2         40040cf2        0     1                 
+        40040cf2         40040cf2       18     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN5defmt6export6header17hafabce6422c1cd65E)
+        40040cf2         40040cf2       18     1                 defmt::export::header::hafabce6422c1cd65
+        40040cf2         40040cf2        0     1                 
+        40040cf2         40040cf2        0     1                 
+        40040cf2         40040cf2        0     1                 
+        40040cf4         40040cf4        0     1                 
+        40040cf4         40040cf4        0     1                 
+        40040cf6         40040cf6        0     1                 
+        40040cfe         40040cfe        0     1                 
+        40040cfe         40040cfe        0     1                 
+        40040d0a         40040d0a        0     1                 
+        40040d0a         40040d0a        0     1                 
+        40040d0a         40040d0a        0     1                 
+        40040d0a         40040d0a        0     1                 
+        40040d0a         40040d0a       9e     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text.main)
+        40040d0a         40040d0a        0     1                 
+        40040d0a         40040d0a        0     1                 
+        40040d0a         40040d0a        0     1                 
+        40040d0a         40040d0a       9e     1                 main
+        40040d0c         40040d0c        0     1                 
+        40040d18         40040d18        0     1                 
+        40040d1a         40040d1a        0     1                 .LBB31_7
+        40040d22         40040d22        0     1                 .LBB31_8
+        40040d2e         40040d2e        0     1                 
+        40040d2e         40040d2e        0     1                 
+        40040d36         40040d36        0     1                 
+        40040d3e         40040d3e        0     1                 
+        40040d3e         40040d3e        0     1                 
+        40040d48         40040d48        0     1                 
+        40040d48         40040d48        0     1                 
+        40040d52         40040d52        0     1                 
+        40040d52         40040d52        0     1                 
+        40040d54         40040d54        0     1                 
+        40040d54         40040d54        0     1                 
+        40040d60         40040d60        0     1                 
+        40040d60         40040d60        0     1                 
+        40040d68         40040d68        0     1                 
+        40040d68         40040d68        0     1                 
+        40040d70         40040d70        0     1                 
+        40040d76         40040d76        0     1                 .LBB31_9
+        40040d7e         40040d7e        0     1                 .LBB31_10
+        40040d8c         40040d8c        0     1                 .LBB31_11
+        40040d8c         40040d8c        0     1                 
+        40040d94         40040d94        0     1                 .LBB31_12
+        40040d9e         40040d9e        0     1                 
+        40040da8         40040da8        0     1                 
+        40040da8         40040da8        0     1                 
+        40040da8         40040da8        0     1                 
+        40040da8         40040da8        0     1                 
+        40040da8         40040da8       bc     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN17mycelium_bitfield4pack19Pack32$LT$T$C$F$GT$9max_value17hbacbd8a70f60c5ebE)
+        40040da8         40040da8       bc     1                 mycelium_bitfield::pack::Pack32$LT$T$C$F$GT$::max_value::hbacbd8a70f60c5eb
+        40040da8         40040da8        0     1                 
+        40040da8         40040da8        0     1                 
+        40040da8         40040da8        0     1                 
+        40040db0         40040db0        0     1                 
+        40040db0         40040db0        0     1                 
+        40040db8         40040db8        0     1                 
+        40040db8         40040db8        0     1                 
+        40040dc0         40040dc0        0     1                 
+        40040e1e         40040e1e        0     1                 
+        40040e1e         40040e1e        0     1                 
+        40040e20         40040e20        0     1                 
+        40040e20         40040e20        0     1                 
+        40040e26         40040e26        0     1                 
+        40040e26         40040e26        0     1                 
+        40040e2e         40040e2e        0     1                 
+        40040e30         40040e30        0     1                 .LBB32_8
+        40040e30         40040e30        0     1                 
+        40040e30         40040e30        0     1                 
+        40040e38         40040e38        0     1                 .LBB32_9
+        40040e46         40040e46        0     1                 
+        40040e46         40040e46        0     1                 .LBB32_10
+        40040e46         40040e46        0     1                 
+        40040e4e         40040e4e        0     1                 .LBB32_11
+        40040e5a         40040e5a        0     1                 
+        40040e64         40040e64        0     1                 
+        40040e64         40040e64        0     1                 
+        40040e64         40040e64        0     1                 
+        40040e64         40040e64       3a     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN9userspace5panik17h469991c0dcbffb14E)
+        40040e64         40040e64       3a     1                 userspace::panik::h469991c0dcbffb14
+        40040e64         40040e64        0     1                 
+        40040e64         40040e64        0     1                 
+        40040e64         40040e64        0     1                 
+        40040e66         40040e66        0     1                 
+        40040e6c         40040e6c        0     1                 
+        40040e6e         40040e6e        0     1                 
+        40040e70         40040e70        0     1                 
+        40040e70         40040e70        0     1                 
+        40040e84         40040e84        0     1                 
+        40040e90         40040e90        0     1                 
+        40040e9c         40040e9c        0     1                 
+        40040e9e         40040e9e        0     1                 
+        40040e9e         40040e9e        0     1                 
+        40040e9e         40040e9e        0     1                 
+        40040e9e         40040e9e       62     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text.rust_begin_unwind)
+        40040e9e         40040e9e       62     1                 rust_begin_unwind
+        40040e9e         40040e9e        0     1                 
+        40040e9e         40040e9e        0     1                 
+        40040e9e         40040e9e        0     1                 
+        40040ea2         40040ea2        0     1                 
+        40040ea6         40040ea6        0     1                 
+        40040ea8         40040ea8        0     1                 
+        40040ea8         40040ea8        0     1                 
+        40040eaa         40040eaa        0     1                 
+        40040eba         40040eba        0     1                 
+        40040eba         40040eba        0     1                 
+        40040ebe         40040ebe        0     1                 
+        40040ebe         40040ebe        0     1                 .LBB34_1
+        40040ec8         40040ec8        0     1                 .LBB34_2
+        40040ec8         40040ec8        0     1                 
+        40040ec8         40040ec8        0     1                 
+        40040ed0         40040ed0        0     1                 
+        40040ed4         40040ed4        0     1                 
+        40040ee0         40040ee0        0     1                 
+        40040ee0         40040ee0        0     1                 
+        40040eec         40040eec        0     1                 
+        40040ef6         40040ef6        0     1                 
+        40040f00         40040f00        0     1                 
+        40040f00         40040f00        0     1                 
+        40040f00         40040f00        0     1                 
+        40040f00         40040f00        0     1                 
+        40040f00         40040f00       1a     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN9userspace8LenWrite3buf17h2a36a6cc876b88c9E)
+        40040f00         40040f00       1a     1                 userspace::LenWrite::buf::h2a36a6cc876b88c9
+        40040f00         40040f00        0     1                 
+        40040f00         40040f00        0     1                 
+        40040f00         40040f00        0     1                 
+        40040f00         40040f00        0     1                 
+        40040f06         40040f06        0     1                 
+        40040f06         40040f06        0     1                 
+        40040f0a         40040f0a        0     1                 
+        40040f0a         40040f0a        0     1                 
+        40040f0c         40040f0c        0     1                 
+        40040f0c         40040f0c        0     1                 
+        40040f0e         40040f0e        0     1                 
+        40040f0e         40040f0e        0     1                 
+        40040f10         40040f10        0     1                 
+        40040f18         40040f18        0     1                 
+        40040f1a         40040f1a        0     1                 
+        40040f1a         40040f1a        0     1                 
+        40040f1a         40040f1a        0     1                 
+        40040f1a         40040f1a        0     1                 
+        40040f1a         40040f1a       96     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN3abi12SyscallIndex4with17h1e4dac8ff7fb2be5E)
+        40040f1a         40040f1a       96     1                 abi::SyscallIndex::with::h1e4dac8ff7fb2be5
+        40040f1a         40040f1a        0     1                 
+        40040f1a         40040f1a        0     1                 
+        40040f1a         40040f1a        0     1                 
+        40040f1c         40040f1c        0     1                 
+        40040f22         40040f22        0     1                 
+        40040f24         40040f24        0     1                 
+        40040f24         40040f24        0     1                 
+        40040f28         40040f28        0     1                 
+        40040f28         40040f28        0     1                 
+        40040f2a         40040f2a        0     1                 
+        40040f2a         40040f2a        0     1                 
+        40040f2e         40040f2e        0     1                 
+        40040f38         40040f38        0     1                 
+        40040f3c         40040f3c        0     1                 
+        40040f3c         40040f3c        0     1                 
+        40040f48         40040f48        0     1                 
+        40040f4a         40040f4a        0     1                 
+        40040f4a         40040f4a        0     1                 
+        40040f4e         40040f4e        0     1                 
+        40040f4e         40040f4e        0     1                 
+        40040f50         40040f50        0     1                 
+        40040f50         40040f50        0     1                 
+        40040f54         40040f54        0     1                 
+        40040f56         40040f56        0     1                 
+        40040f5a         40040f5a        0     1                 
+        40040f5a         40040f5a        0     1                 
+        40040f6a         40040f6a        0     1                 
+        40040f6c         40040f6c        0     1                 
+        40040f6c         40040f6c        0     1                 .LBB36_3
+        40040f7c         40040f7c        0     1                 .LBB36_4
+        40040f7c         40040f7c        0     1                 
+        40040f7c         40040f7c        0     1                 
+        40040f84         40040f84        0     1                 
+        40040f88         40040f88        0     1                 
+        40040f8a         40040f8a        0     1                 .LBB36_5
+        40040f92         40040f92        0     1                 
+        40040f98         40040f98        0     1                 
+        40040f9c         40040f9c        0     1                 
+        40040f9c         40040f9c        0     1                 .LBB36_6
+        40040f9c         40040f9c        0     1                 
+        40040fb0         40040fb0        0     1                 
+        40040fb0         40040fb0        0     1                 
+        40040fb0         40040fb0        0     1                 
+        40040fb0         40040fb0        0     1                 
+        40040fb0         40040fb0       92     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN3abi12SyscallIndex4with17hdceca88c706e2737E)
+        40040fb0         40040fb0       92     1                 abi::SyscallIndex::with::hdceca88c706e2737
+        40040fb0         40040fb0        0     1                 
+        40040fb0         40040fb0        0     1                 
+        40040fb0         40040fb0        0     1                 
+        40040fb2         40040fb2        0     1                 
+        40040fb6         40040fb6        0     1                 
+        40040fb8         40040fb8        0     1                 
+        40040fba         40040fba        0     1                 
+        40040fba         40040fba        0     1                 
+        40040fbc         40040fbc        0     1                 
+        40040fbc         40040fbc        0     1                 
+        40040fca         40040fca        0     1                 
+        40040fcc         40040fcc        0     1                 
+        40040fcc         40040fcc        0     1                 
+        40040fd8         40040fd8        0     1                 
+        40040fd8         40040fd8        0     1                 
+        40040fdc         40040fdc        0     1                 
+        40040fde         40040fde        0     1                 
+        40040fde         40040fde        0     1                 
+        40040fe2         40040fe2        0     1                 
+        40040fe2         40040fe2        0     1                 
+        40040fe4         40040fe4        0     1                 
+        40040fe4         40040fe4        0     1                 
+        40040fe8         40040fe8        0     1                 
+        40040fec         40040fec        0     1                 
+        40040fec         40040fec        0     1                 
+        40040ffc         40040ffc        0     1                 
+        40040ffe         40040ffe        0     1                 
+        40040ffe         40040ffe        0     1                 .LBB37_3
+        4004100e         4004100e        0     1                 .LBB37_4
+        4004100e         4004100e        0     1                 
+        4004100e         4004100e        0     1                 
+        40041016         40041016        0     1                 
+        4004101a         4004101a        0     1                 
+        4004101c         4004101c        0     1                 .LBB37_5
+        40041024         40041024        0     1                 
+        4004102a         4004102a        0     1                 
+        4004102e         4004102e        0     1                 
+        4004102e         4004102e        0     1                 .LBB37_6
+        4004102e         4004102e        0     1                 
+        40041042         40041042        0     1                 
+        40041042         40041042        0     1                 
+        40041042         40041042        0     1                 
+        40041042         40041042        0     1                 
+        40041042         40041042       42     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._defmt_write)
+        40041042         40041042        0     1                 
+        40041042         40041042        0     1                 
+        40041042         40041042        0     1                 
+        40041042         40041042       42     1                 _defmt_write
+        40041044         40041044        0     1                 
+        4004104a         4004104a        0     1                 
+        4004104c         4004104c        0     1                 
+        4004104e         4004104e        0     1                 
+        4004104e         4004104e        0     1                 
+        40041062         40041062        0     1                 
+        4004106e         4004106e        0     1                 
+        4004106e         4004106e        0     1                 
+        4004107a         4004107a        0     1                 
+        4004107a         4004107a        0     1                 
+        4004107e         4004107e        0     1                 
+        40041080         40041080        0     1                 
+        40041084         40041084        0     1                 
+        40041084         40041084        0     1                 
+        40041084         40041084        0     1                 
+        40041084         40041084       18     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._defmt_timestamp)
+        40041084         40041084        0     1                 
+        40041084         40041084        0     1                 
+        40041084         40041084        0     1                 
+        40041084         40041084       18     1                 _defmt_timestamp
+        40041086         40041086        0     1                 
+        40041086         40041086        0     1                 
+        40041086         40041086        0     1                 
+        40041088         40041088        0     1                 
+        4004108a         4004108a        0     1                 
+        4004108a         4004108a        0     1                 
+        40041096         40041096        0     1                 
+        40041096         40041096        0     1                 
+        4004109c         4004109c        0     1                 
+        4004109c         4004109c        0     1                 
+        4004109c         4004109c        0     1                 
+        4004109c         4004109c       4c     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN9userspace4rv647syscall17h54a704e2adb51826E)
+        4004109c         4004109c       4c     1                 userspace::rv64::syscall::h54a704e2adb51826
+        4004109c         4004109c        0     1                 
+        4004109c         4004109c        0     1                 
+        4004109c         4004109c        0     1                 
+        4004109c         4004109c        0     1                 
+        400410e8         400410e8        0     1                 
+        400410e8         400410e8        0     1                 
+        400410e8         400410e8        0     1                 
+        400410e8         400410e8       f2     2         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.text._ZN44_$LT$$RF$T$u20$as$u20$core..fmt..Display$GT$3fmt17hb891edefbc5d2a64E)
+        400410e8         400410e8       f2     1                 _$LT$$RF$T$u20$as$u20$core..fmt..Display$GT$::fmt::hb891edefbc5d2a64
+        400410e8         400410e8        0     1                 
+        400410e8         400410e8        0     1                 
+        400410e8         400410e8        0     1                 
+        400410ea         400410ea        0     1                 
+        400410ea         400410ea        0     1                 
+        400410ea         400410ea        0     1                 
+        400410f4         400410f4        0     1                 
+        400410f8         400410f8        0     1                 
+        400410f8         400410f8        0     1                 
+        400410fc         400410fc        0     1                 
+        400410fc         400410fc        0     1                 
+        40041102         40041102        0     1                 
+        40041102         40041102        0     1                 .LBB43_8
+        40041112         40041112        0     1                 
+        40041112         40041112        0     1                 
+        40041114         40041114        0     1                 
+        4004111a         4004111a        0     1                 
+        4004111e         4004111e        0     1                 
+        40041120         40041120        0     1                 .LBB43_9
+        4004112a         4004112a        0     1                 
+        40041130         40041130        0     1                 
+        40041130         40041130        0     1                 
+        40041132         40041132        0     1                 
+        40041132         40041132        0     1                 
+        40041136         40041136        0     1                 
+        40041136         40041136        0     1                 .LBB43_10
+        40041136         40041136        0     1                 
+        40041140         40041140        0     1                 
+        40041144         40041144        0     1                 
+        40041148         40041148        0     1                 
+        4004114a         4004114a        0     1                 .LBB43_11
+        40041152         40041152        0     1                 
+        40041154         40041154        0     1                 .LBB43_12
+        4004117c         4004117c        0     1                 
+        40041180         40041180        0     1                 
+        40041180         40041180        0     1                 
+        4004118a         4004118a        0     1                 .LBB43_13
+        40041196         40041196        0     1                 .LBB43_14
+        400411a4         400411a4        0     1                 .LBB43_15
+        400411a4         400411a4        0     1                 
+        400411a4         400411a4        0     1                 
+        400411ba         400411ba        0     1                 
+        400411ca         400411ca        0     1                 
+        400411ca         400411ca        0     1                 
+        400411da         400411da        0     1                 
+        400411da         400411da        0     1                 
+        400411da         400411da        0     1                 
+        400411da         400411da        8     2         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.108.rcgu.o):(.text.memset)
+        400411da         400411da        0     1                 
+        400411da         400411da        0     1                 
+        400411da         400411da        0     1                 
+        400411da         400411da        0     1                 
+        400411da         400411da        8     1                 memset
+        400411e2         400411e2        0     1                 
+        400411e2         400411e2        0     1                 
+        400411e2         400411e2        0     1                 
+        400411e2         400411e2       ae     2         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.text._ZN17compiler_builtins3mem6memcpy17h2b8f356d89eeeefaE)
+        400411e2         400411e2        0     1                 
+        400411e2         400411e2        0     1                 
+        400411e2         400411e2        0     1                 
+        400411e2         400411e2       ae     1                 compiler_builtins::mem::memcpy::h2b8f356d89eeeefa
+        400411e4         400411e4        0     1                 
+        400411e4         400411e4        0     1                 
+        400411e8         400411e8        0     1                 
+        400411e8         400411e8        0     1                 
+        400411ec         400411ec        0     1                 
+        400411ec         400411ec        0     1                 
+        400411f0         400411f0        0     1                 
+        400411f0         400411f0        0     1                 
+        400411f4         400411f4        0     1                 
+        400411f4         400411f4        0     1                 
+        400411f8         400411f8        0     1                 
+        400411fc         400411fc        0     1                 
+        40041204         40041204        0     1                 
+        40041204         40041204        0     1                 
+        40041206         40041206        0     1                 
+        40041206         40041206        0     1                 
+        40041208         40041208        0     1                 
+        40041208         40041208        0     1                 
+        4004120c         4004120c        0     1                 
+        4004120c         4004120c        0     1                 
+        40041210         40041210        0     1                 
+        40041210         40041210        0     1                 
+        40041218         40041218        0     1                 
+        4004121c         4004121c        0     1                 
+        40041220         40041220        0     1                 
+        40041222         40041222        0     1                 
+        40041222         40041222        0     1                 
+        40041226         40041226        0     1                 
+        4004122a         4004122a        0     1                 
+        4004122e         4004122e        0     1                 
+        40041238         40041238        0     1                 
+        4004123e         4004123e        0     1                 
+        40041248         40041248        0     1                 
+        4004124c         4004124c        0     1                 
+        4004124c         4004124c        0     1                 
+        4004124e         4004124e        0     1                 
+        4004124e         4004124e        0     1                 
+        40041258         40041258        0     1                 
+        40041258         40041258        0     1                 
+        4004125a         4004125a        0     1                 
+        4004125a         4004125a        0     1                 
+        4004125e         4004125e        0     1                 
+        4004125e         4004125e        0     1                 
+        40041262         40041262        0     1                 
+        40041264         40041264        0     1                 
+        4004126a         4004126a        0     1                 
+        4004126a         4004126a        0     1                 
+        4004126c         4004126c        0     1                 
+        4004126c         4004126c        0     1                 
+        4004126e         4004126e        0     1                 
+        4004126e         4004126e        0     1                 
+        40041272         40041272        0     1                 
+        40041272         40041272        0     1                 
+        40041276         40041276        0     1                 
+        40041276         40041276        0     1                 
+        4004127a         4004127a        0     1                 
+        4004127a         4004127a        0     1                 
+        4004127c         4004127c        0     1                 
+        4004127e         4004127e        0     1                 
+        40041286         40041286        0     1                 
+        40041286         40041286        0     1                 
+        40041288         40041288        0     1                 
+        40041288         40041288        0     1                 
+        4004128e         4004128e        0     1                 
+        4004128e         4004128e        0     1                 
+        40041290         40041290        0     1                 
+        40041290         40041290        0     1                 
+        40041290         40041290        0     1                 
+        40041290         40041290       68     2         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.text._ZN17compiler_builtins3mem6memset17h5fb89d03609a145fE)
+        40041290         40041290        0     1                 
+        40041290         40041290        0     1                 
+        40041290         40041290        0     1                 
+        40041290         40041290       68     1                 compiler_builtins::mem::memset::h5fb89d03609a145f
+        40041292         40041292        0     1                 
+        40041292         40041292        0     1                 
+        40041296         40041296        0     1                 
+        40041296         40041296        0     1                 
+        4004129a         4004129a        0     1                 
+        4004129a         4004129a        0     1                 
+        4004129c         4004129c        0     1                 
+        4004129c         4004129c        0     1                 
+        400412a0         400412a0        0     1                 
+        400412a0         400412a0        0     1                 
+        400412a2         400412a2        0     1                 
+        400412a4         400412a4        0     1                 
+        400412a8         400412a8        0     1                 
+        400412a8         400412a8        0     1                 
+        400412aa         400412aa        0     1                 
+        400412aa         400412aa        0     1                 
+        400412ae         400412ae        0     1                 
+        400412ae         400412ae        0     1                 
+        400412b6         400412b6        0     1                 
+        400412b6         400412b6        0     1                 
+        400412ba         400412ba        0     1                 
+        400412ba         400412ba        0     1                 
+        400412be         400412be        0     1                 
+        400412d6         400412d6        0     1                 
+        400412d8         400412d8        0     1                 
+        400412d8         400412d8        0     1                 
+        400412da         400412da        0     1                 
+        400412da         400412da        0     1                 
+        400412de         400412de        0     1                 
+        400412de         400412de        0     1                 
+        400412e2         400412e2        0     1                 
+        400412e2         400412e2        0     1                 
+        400412e6         400412e6        0     1                 
+        400412e8         400412e8        0     1                 
+        400412ea         400412ea        0     1                 
+        400412ec         400412ec        0     1                 
+        400412f0         400412f0        0     1                 
+        400412f0         400412f0        0     1                 
+        400412f6         400412f6        0     1                 
+        400412f6         400412f6        0     1                 
+        400412f8         400412f8        0     1                 
+        400412f8         400412f8        0     1                 
+        400412f8         400412f8        0     1                 
+        400412f8         400412f8        8     2         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.18.rcgu.o):(.text.memcpy)
+        400412f8         400412f8        0     1                 
+        400412f8         400412f8        0     1                 
+        400412f8         400412f8        0     1                 
+        400412f8         400412f8        0     1                 
+        400412f8         400412f8        8     1                 memcpy
+        40041300         40041300        0     1                 
+        40041300         40041300        0     1                 
+        40041300         40041300        0     1                 
+        40041300         40041300      478    16 .rodata
+        40041300         40041300       30     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.2fdcbf30d4de919e7cc8396ce26b2abc.0)
+        40041300         40041300       30     1                 .Lanon.2fdcbf30d4de919e7cc8396ce26b2abc.0
+        40041330         40041330        0     1                 
+        40041330         40041330       24    16         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata.str.0)
+        40041330         40041330       24     1                 str.0
+        40041354         40041354        1     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.198)
+        40041354         40041354        1     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.198
+        40041358         40041358       30     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.199)
+        40041358         40041358       30     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.199
+        40041388         40041388        c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.200)
+        40041388         40041388        c     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.200
+        40041394         40041394        1     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.201)
+        40041394         40041394        1     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.201
+        40041395         40041395        3     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.202)
+        40041395         40041395        3     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.202
+        40041398         40041398       20     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.203)
+        40041398         40041398       20     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.203
+        400413b8         400413b8       20     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.209)
+        400413b8         400413b8       20     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.209
+        400413d8         400413d8        2     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.258)
+        400413d8         400413d8        2     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.258
+        400413da         400413da       c8     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.260)
+        400413da         400413da       c8     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.260
+        400414a2         400414a2       12     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.275)
+        400414a2         400414a2       12     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.275
+        400414b4         400414b4       22     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.276)
+        400414b4         400414b4       22     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.276
+        400414d8         400414d8       20     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.277)
+        400414d8         400414d8       20     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.277
+        400414f8         400414f8       1f     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.278)
+        400414f8         400414f8       1f     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.278
+        40041518         40041518       18     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.279)
+        40041518         40041518       18     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.279
+        40041530         40041530       10     1         <internal>:(.rodata)
+        40041540         40041540       20     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.284)
+        40041540         40041540       20     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.284
+        40041560         40041560       18     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.e5fb1397fbb585418c3345e33144333e.285)
+        40041560         40041560       18     1                 .Lanon.e5fb1397fbb585418c3345e33144333e.285
+        40041578         40041578        b     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.1ac1c1ec00e7da1b319f9c092c0ddb5a.0)
+        40041578         40041578        b     1                 .Lanon.1ac1c1ec00e7da1b319f9c092c0ddb5a.0
+        40041588         40041588       18     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.1ac1c1ec00e7da1b319f9c092c0ddb5a.1)
+        40041588         40041588       18     1                 .Lanon.1ac1c1ec00e7da1b319f9c092c0ddb5a.1
+        400415a0         400415a0       1c    16         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata.str.0.207)
+        400415a0         400415a0       1c     1                 str.0.207
+        400415c0         400415c0       18     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.1ac1c1ec00e7da1b319f9c092c0ddb5a.2)
+        400415c0         400415c0       18     1                 .Lanon.1ac1c1ec00e7da1b319f9c092c0ddb5a.2
+        400415e0         400415e0       21    16         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata.str.2.208)
+        400415e0         400415e0       21     1                 str.2.208
+        40041601         40041601       57     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.782bfe38c41fe01cbe4853fc0c39242c.0)
+        40041601         40041601       57     1                 .Lanon.782bfe38c41fe01cbe4853fc0c39242c.0
+        40041658         40041658       18     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.782bfe38c41fe01cbe4853fc0c39242c.1)
+        40041658         40041658       18     1                 .Lanon.782bfe38c41fe01cbe4853fc0c39242c.1
+        40041670         40041670       23    16         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata.str.0.209)
+        40041670         40041670       23     1                 str.0.209
+        40041693         40041693       32     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.782bfe38c41fe01cbe4853fc0c39242c.2)
+        40041693         40041693       32     1                 .Lanon.782bfe38c41fe01cbe4853fc0c39242c.2
+        400416c5         400416c5        e     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.782bfe38c41fe01cbe4853fc0c39242c.3)
+        400416c5         400416c5        e     1                 .Lanon.782bfe38c41fe01cbe4853fc0c39242c.3
+        400416d8         400416d8       20     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.782bfe38c41fe01cbe4853fc0c39242c.4)
+        400416d8         400416d8       20     1                 .Lanon.782bfe38c41fe01cbe4853fc0c39242c.4
+        400416f8         400416f8       70     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.782bfe38c41fe01cbe4853fc0c39242c.5)
+        400416f8         400416f8       70     1                 .Lanon.782bfe38c41fe01cbe4853fc0c39242c.5
+        40041768         40041768        0     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.40bbbfa8f6f1e8f528d91da4995ddc72.0)
+        40041768         40041768        0     1                 .Lanon.40bbbfa8f6f1e8f528d91da4995ddc72.0
+        40041768         40041768       10     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.rodata..Lanon.40bbbfa8f6f1e8f528d91da4995ddc72.3)
+        40041768         40041768       10     1                 .Lanon.40bbbfa8f6f1e8f528d91da4995ddc72.3
+        40041778         40041778        0     1         . = ALIGN ( 4 )
+        40041778         40041778        1     1 .defmt.prim.{"package":"defmt","tag":"defmt_prim","data":"{=i32}","disambiguator":"6692251879976106409"}
+        40041778         40041778        1     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.defmt.prim.{"package":"defmt","tag":"defmt_prim","data":"{=i32}","disambiguator":"6692251879976106409"})
+        40041778         40041778        1     1                 {"package":"defmt","tag":"defmt_prim","data":"{=i32}","disambiguator":"6692251879976106409"}
+        40041779         40041779        0     1                 
+        40041779         40041779        1     1 .defmt.{"package":"foo","tag":"defmt_println","data":"test: {:?}","disambiguator":"6264102100887604911"}
+        40041779         40041779        1     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.defmt.{"package":"foo","tag":"defmt_println","data":"test: {:?}","disambiguator":"6264102100887604911"})
+        40041779         40041779        1     1                 {"package":"foo","tag":"defmt_println","data":"test: {:?}","disambiguator":"6264102100887604911"}
+        4004177a         4004177a        0     1                 
+        40112000         40041780       28     8 .data
+        40112000         40041780        0     1         _sidata = LOADADDR ( .data )
+        40112000         40041780        0     1         _sdata = .
+        40112000         40041780       28     8         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.sdata)
+        40112000         40041780        0     1                 .LCPI8_0
+        40112008         40041788        0     1                 .LCPI10_0
+        40112010         40041790        0     1                 .LCPI19_0
+        40112018         40041798        0     1                 .LCPI19_1
+        40112020         400417a0        0     1                 .LCPI43_0
+        40112028         400417a8        0     1         . = ALIGN ( 4 )
+        40112028         400417a8        0     1         _edata = .
+        40112028         40112028        0     1 .bss
+        40112028         40112028        0     1         _sbss = .
+        40112028         40112028        0     1         . = ALIGN ( 4 )
+        40112028         40112028        0     1         _ebss = .
+        40112028         40112028        0     1 .heap
+        40112028         40112028        0     1         _sheap = .
+        40112028         40112028        0     1         . += _heap_size
+        40112028         40112028        0     1         . = ALIGN ( 4 )
+        40112028         40112028        0     1         _eheap = .
+        40112028         40112028    7dfd8     1 .stack
+        40112028         40112028        0     1         _estack = .
+        40112028         40112028    7dfd8     1         . = ABSOLUTE ( _stack_start )
+        40190000         40190000        0     1         _sstack = .
+               0                0      4f4     8 .eh_frame
+               0                0       14     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x0)
+              18               18       2c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x14)
+              48               48       1c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x40)
+              68               68       1c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x5c)
+              88               88       1c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x78)
+              a8               a8       14     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x94)
+              c0               c0       2c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0xa8)
+              f0               f0       14     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0xd4)
+             108              108       14     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0xe8)
+             120              120       1c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0xfc)
+             140              140      134     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x118)
+             278              278       3c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x24c)
+             2b8              2b8       2c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x288)
+             2e8              2e8       48     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x2b4)
+             330              330       24     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x324)
+             358              358       14     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x348)
+             370              370       1c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x35c)
+             390              390       2c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x378)
+             3c0              3c0       1c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x3a4)
+             3e0              3e0       1c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x3c0)
+             400              400       1c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x3f0)
+             420              420       2c     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x40c)
+             450              450       14     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x438)
+             468              468       24     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.eh_frame+0x44c)
+             490              490       14     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.108.rcgu.o):(.eh_frame+0x14)
+             4a8              4a8       14     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.eh_frame+0x14)
+             4c0              4c0       14     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.eh_frame+0x3c)
+             4d8              4d8       14     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.18.rcgu.o):(.eh_frame+0x14)
+               0                0      f42     1 .debug_loc
+               0                0      f42     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.debug_loc)
+               0                0        0     1                 
+              33               33        0     1                 
+              67               67        0     1                 
+              9a               9a        0     1                 
+              cd               cd        0     1                 
+             105              105        0     1                 
+             138              138        0     1                 
+             191              191        0     1                 
+             1ed              1ed        0     1                 
+             224              224        0     1                 
+             25b              25b        0     1                 
+             28e              28e        0     1                 
+             2c5              2c5        0     1                 
+             2fc              2fc        0     1                 
+             336              336        0     1                 
+             369              369        0     1                 
+             39d              39d        0     1                 
+             3d0              3d0        0     1                 
+             408              408        0     1                 
+             43b              43b        0     1                 
+             472              472        0     1                 
+             4a9              4a9        0     1                 
+             4e3              4e3        0     1                 
+             51e              51e        0     1                 
+             554              554        0     1                 
+             57f              57f        0     1                 
+             5a2              5a2        0     1                 
+             60a              60a        0     1                 
+             651              651        0     1                 
+             686              686        0     1                 
+             6cc              6cc        0     1                 
+             740              740        0     1                 
+             7a8              7a8        0     1                 
+             810              810        0     1                 
+             884              884        0     1                 
+             8ec              8ec        0     1                 
+             936              936        0     1                 
+             98f              98f        0     1                 
+             9c2              9c2        0     1                 
+             9fc              9fc        0     1                 
+             a42              a42        0     1                 
+             a89              a89        0     1                 
+             abe              abe        0     1                 
+             af3              af3        0     1                 
+             b4c              b4c        0     1                 
+             b86              b86        0     1                 
+             bce              bce        0     1                 
+             c22              c22        0     1                 
+             c59              c59        0     1                 
+             c8e              c8e        0     1                 
+             cc3              cc3        0     1                 
+             d40              d40        0     1                 
+             d8d              d8d        0     1                 
+             dda              dda        0     1                 
+             e27              e27        0     1                 
+             e74              e74        0     1                 
+             ec1              ec1        0     1                 
+             efc              efc        0     1                 
+             f1f              f1f        0     1                 
+               0                0      8ef     1 .debug_abbrev
+               0                0      7c5     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.debug_abbrev)
+             7c5              7c5       31     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.108.rcgu.o):(.debug_abbrev)
+             7f6              7f6       c8     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.debug_abbrev)
+             8be              8be       31     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.18.rcgu.o):(.debug_abbrev)
+               0                0     75fb     1 .debug_info
+               0                0     64c1     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.debug_info)
+               0                0        0     1                 
+             770              770        0     1                 
+            1187             1187        0     1                 
+            11bd             11bd        0     1                 
+            11e1             11e1        0     1                 
+            1205             1205        0     1                 
+            1348             1348        0     1                 
+            177b             177b        0     1                 
+            1930             1930        0     1                 
+            1b8f             1b8f        0     1                 
+            1eb8             1eb8        0     1                 
+            20d5             20d5        0     1                 
+            24ee             24ee        0     1                 
+            255c             255c        0     1                 
+            281e             281e        0     1                 
+            2f29             2f29        0     1                 
+            2f5f             2f5f        0     1                 
+            2f95             2f95        0     1                 
+            3439             3439        0     1                 
+            34b5             34b5        0     1                 
+            35b0             35b0        0     1                 
+            3742             3742        0     1                 
+            3dcf             3dcf        0     1                 
+            3dff             3dff        0     1                 
+            40e8             40e8        0     1                 
+            4326             4326        0     1                 
+            6073             6073        0     1                 
+            60fd             60fd        0     1                 
+            6178             6178        0     1                 
+            6403             6403        0     1                 
+            642d             642d        0     1                 
+            64c1             64c1       53     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.108.rcgu.o):(.debug_info)
+            64c1             64c1        0     1                 
+            6514             6514     1094     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.debug_info)
+            6514             6514        0     1                 
+            75a8             75a8       53     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.18.rcgu.o):(.debug_info)
+            75a8             75a8        0     1                 
+               0                0     1190     1 .debug_aranges
+               0                0      ff0     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.debug_aranges)
+             ff0              ff0       30     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.108.rcgu.o):(.debug_aranges)
+            1020             1020      140     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.debug_aranges)
+            1160             1160       30     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.18.rcgu.o):(.debug_aranges)
+               0                0     12b0     1 .debug_ranges
+               0                0     1090     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.debug_ranges)
+               0                0        0     1                 
+              40               40        0     1                 
+              80               80        0     1                 
+              b0               b0        0     1                 
+              e0               e0        0     1                 
+             110              110        0     1                 
+             140              140        0     1                 
+             180              180        0     1                 
+             1b0              1b0        0     1                 
+             1e0              1e0        0     1                 
+             210              210        0     1                 
+             240              240        0     1                 
+             270              270        0     1                 
+             2c0              2c0        0     1                 
+             2f0              2f0        0     1                 
+             320              320        0     1                 
+             350              350        0     1                 
+             380              380        0     1                 
+             3b0              3b0        0     1                 
+             3e0              3e0        0     1                 
+             410              410        0     1                 
+             440              440        0     1                 
+             470              470        0     1                 
+             4b0              4b0        0     1                 
+             4f0              4f0        0     1                 
+             540              540        0     1                 
+             570              570        0     1                 
+             5b0              5b0        0     1                 
+             5f0              5f0        0     1                 
+             620              620        0     1                 
+             670              670        0     1                 
+             6a0              6a0        0     1                 
+             6f0              6f0        0     1                 
+             720              720        0     1                 
+             760              760        0     1                 
+             7e0              7e0        0     1                 
+             830              830        0     1                 
+             870              870        0     1                 
+             8a0              8a0        0     1                 
+             8e0              8e0        0     1                 
+             920              920        0     1                 
+             950              950        0     1                 
+             980              980        0     1                 
+             9b0              9b0        0     1                 
+             9e0              9e0        0     1                 
+             a10              a10        0     1                 
+             a40              a40        0     1                 
+             a70              a70        0     1                 
+             aa0              aa0        0     1                 
+             ad0              ad0        0     1                 
+             b00              b00        0     1                 
+             b30              b30        0     1                 
+             b60              b60        0     1                 
+             ba0              ba0        0     1                 
+             bd0              bd0        0     1                 
+             c00              c00        0     1                 
+             c30              c30        0     1                 
+             c60              c60        0     1                 
+             c90              c90        0     1                 
+             cc0              cc0        0     1                 
+             cf0              cf0        0     1                 
+             d20              d20        0     1                 
+             d50              d50        0     1                 
+             d80              d80        0     1                 
+             de0              de0        0     1                 
+             e10              e10        0     1                 
+             e40              e40        0     1                 
+             e80              e80        0     1                 
+             eb0              eb0        0     1                 
+             ef0              ef0        0     1                 
+            1060             1060        0     1                 
+            1090             1090      220     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.debug_ranges)
+            1090             1090        0     1                 
+            10c0             10c0        0     1                 
+            10f0             10f0        0     1                 
+            1120             1120        0     1                 
+            1150             1150        0     1                 
+            1180             1180        0     1                 
+               0                0     d8b1     1 .debug_str
+               0                0     d8b1     1         <internal>:(.debug_str)
+               0                0     3c62     1 .debug_pubnames
+               0                0     3572     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.debug_pubnames)
+            3572             3572       3b     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.108.rcgu.o):(.debug_pubnames)
+            35ad             35ad      67a     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.debug_pubnames)
+            3c27             3c27       3b     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.18.rcgu.o):(.debug_pubnames)
+               0                0     1197     1 .debug_pubtypes
+               0                0     1161     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.debug_pubtypes)
+            1161             1161       12     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.108.rcgu.o):(.debug_pubtypes)
+            1173             1173       12     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.debug_pubtypes)
+            1185             1185       12     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.18.rcgu.o):(.debug_pubtypes)
+               0                0       2b     1 .riscv.attributes
+               0                0       2b     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.riscv.attributes)
+               0                0     363f     1 .debug_line
+               0                0     2ae1     1         /Users/sphw/code/k5/examples/rv-foo/target/riscv64imac-unknown-none-elf/debug/deps/foo-e6784eafb5d98c16.userspace-b8d26857aa28fa9c.1nqehmstbnqit8ge.rcgu.o.rcgu.o:(.debug_line)
+               0                0        0     1                 .Lline_table_start0
+             485              485        0     1                 .Lline_table_start1
+             5b3              5b3        0     1                 .Lline_table_start2
+             5d1              5d1        0     1                 .Lline_table_start3
+             5ef              5ef        0     1                 .Lline_table_start4
+             60d              60d        0     1                 .Lline_table_start5
+             63a              63a        0     1                 .Lline_table_start6
+             666              666        0     1                 .Lline_table_start7
+             6f0              6f0        0     1                 .Lline_table_start8
+             77c              77c        0     1                 .Lline_table_start9
+             7b5              7b5        0     1                 .Lline_table_start10
+             83c              83c        0     1                 .Lline_table_start11
+             88b              88b        0     1                 .Lline_table_start12
+             8c1              8c1        0     1                 .Lline_table_start13
+             8df              8df        0     1                 .Lline_table_start14
+             914              914        0     1                 .Lline_table_start15
+             932              932        0     1                 .Lline_table_start16
+             950              950        0     1                 .Lline_table_start17
+             96e              96e        0     1                 .Lline_table_start18
+             98c              98c        0     1                 .Lline_table_start19
+             b58              b58        0     1                 .Lline_table_start20
+             c8a              c8a        0     1                 .Lline_table_start21
+             f76              f76        0     1                 .Lline_table_start22
+            118a             118a        0     1                 .Lline_table_start23
+            1330             1330        0     1                 .Lline_table_start24
+            152c             152c        0     1                 .Lline_table_start25
+            28ff             28ff        0     1                 .Lline_table_start26
+            29dd             29dd        0     1                 .Lline_table_start27
+            2a1f             2a1f        0     1                 .Lline_table_start28
+            2a5e             2a5e        0     1                 .Lline_table_start29
+            2a7c             2a7c        0     1                 .Lline_table_start30
+            2ae1             2ae1       4d     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.108.rcgu.o):(.debug_line)
+            2ae1             2ae1        0     1                 .Lline_table_start0
+            2b2e             2b2e      ac4     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.10.rcgu.o):(.debug_line)
+            2b2e             2b2e        0     1                 .Lline_table_start0
+            35f2             35f2       4d     1         /Users/sphw/.rustup/toolchains/nightly-aarch64-apple-darwin/lib/rustlib/riscv64imac-unknown-none-elf/lib/libcompiler_builtins-a963df6458589a3a.rlib(compiler_builtins-a963df6458589a3a.compiler_builtins.69eec3d7-cgu.18.rcgu.o):(.debug_line)
+            35f2             35f2        0     1                 .Lline_table_start0
+               0                0       13     1 .comment
+               0                0       13     1         <internal>:(.comment)
+               0                0    11010     8 .symtab
+               0                0    11010     8         <internal>:(.symtab)
+               0                0      1bd     1 .shstrtab
+               0                0      1bd     1         <internal>:(.shstrtab)
+               0                0     1583     1 .strtab
+               0                0     1583     1         <internal>:(.strtab)

@@ -258,13 +258,13 @@ pub fn recv<T: ?Sized, R: Sized>(mask: u32, r: &mut T) -> Result<RecvResp<R>, Er
     }
 }
 
-#[derive(Format)]
+#[derive(Format, Debug)]
 pub struct RecvResp<T: ?Sized + 'static> {
     pub cap: Option<CapRef>,
     pub body: RecvRespBody<T>,
 }
 
-#[derive(Format)]
+#[derive(Format, Debug)]
 pub enum RecvRespBody<T: ?Sized + 'static> {
     Copy(usize),
     Page(PageRefMut<'static, T>),
@@ -396,7 +396,7 @@ impl<T> DerefMut for Page<T> {
     }
 }
 
-#[derive(Format)]
+#[derive(Format, Debug)]
 pub struct PageRefMut<'a, T: ?Sized + 'a>(&'a mut T);
 impl<T> Deref for PageRefMut<'static, T> {
     type Target = T;

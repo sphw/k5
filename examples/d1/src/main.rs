@@ -5,6 +5,8 @@
 
 mod timer;
 
+extern crate alloc;
+
 use core::{
     alloc::{GlobalAlloc, Layout},
     arch::asm,
@@ -133,7 +135,23 @@ fn main() -> ! {
     //     unsafe { riscv::asm::wfi() };
     // }
     let mut kernel = kernel::KernelBuilder::new(task_table::TASKS);
-    let _idle = kernel.idle_thread(task_table::IDLE.connect(*b"0123456789abcdef"));
+    let _idle = kernel.idle_thread(task_table::IDLE);
+
+    let foo_thread = kernel.thread(
+        task_table::FOO
+            .priority(7)
+            .budget(5)
+            .cooldown(usize::MAX)
+            .listen(*b"0123456789abcdef"),
+    );
+    let bar_thread = kernel.thread(
+        task_table::BAR
+            .priority(7)
+            .budget(100)
+            .cooldown(50)
+            .connect(*b"0123456789abcdef"),
+    );
+    kernel.endpoint(bar_thread, foo_thread, 0);
     kernel.start()
 }
 
@@ -184,6 +202,8 @@ fn oom(_: core::alloc::Layout) -> ! {
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
+    let string = alloc::format!("{:?}", info);
+    board_log(string.as_bytes());
     loop {}
 }
 

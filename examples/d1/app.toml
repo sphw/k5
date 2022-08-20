@@ -18,6 +18,19 @@ sizes.ram = 0x40000
 
 [[tasks]]
 name = "idle"
+crate_path = "../rv-idle"
+secure = false
+root = false
+
+[[tasks]]
+name = "foo"
 crate_path = "../rv-foo"
+secure = false
+root = false
+
+
+[[tasks]]
+name = "bar"
+crate_path = "../rv-bar"
 secure = false
 root = false
