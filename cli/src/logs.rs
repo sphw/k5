@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, File},
+    fs,
     io::{self, Read},
     path::{Path, PathBuf},
     sync::{
@@ -15,7 +15,7 @@ use colored::Colorize;
 use defmt_decoder::{DecodeError, Frame, Locations};
 use probe_rs::{Core, MemoryInterface as _, Session};
 use probe_rs_rtt::{Rtt, ScanRegion, UpChannel};
-use serialport::{SerialPort, SerialPortBuilder, SerialPortType};
+use serialport::{SerialPort, SerialPortType};
 use signal_hook::consts::signal;
 
 const TIMEOUT: Duration = Duration::from_secs(2);

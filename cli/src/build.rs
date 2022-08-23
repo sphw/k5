@@ -100,6 +100,13 @@ impl Platform {
             Platform::ArmV8m => ARM_TASK_LINK_BYTES,
         }
     }
+
+    pub(crate) fn relocate(&self) -> bool {
+        match self {
+            Platform::RV32 | Platform::AwD1 => false,
+            Platform::ArmV8m => true,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Copy)]
@@ -218,11 +225,16 @@ impl Kernel {
         let task_list = codegen::TaskList { tasks };
         let task_list_path = target_dir.join("task_list.json");
         fs::write(task_list_path.clone(), serde_json::to_vec(&task_list)?)?;
-        build_crate(&self.crate_path, Some(&task_list_path), "link.x")
+        build_crate(&self.crate_path, Some(&task_list_path), "link.x", false)
     }
 }
 
-fn build_crate(crate_path: &Path, task_list: Option<&Path>, link_name: &str) -> Result<PathBuf> {
+fn build_crate(
+    crate_path: &Path,
+    task_list: Option<&Path>,
+    link_name: &str,
+    reloc: bool,
+) -> Result<PathBuf> {
     let target_dir = crate_path.join("target");
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&crate_path)
@@ -233,6 +245,9 @@ fn build_crate(crate_path: &Path, task_list: Option<&Path>, link_name: &str) -> 
         .arg(format!("link-arg=-T{link_name}"))
         .arg("-L")
         .arg(format!("{}", target_dir.display()));
+    if reloc {
+        cmd.arg("-C").arg("link-arg=-r");
+    };
     if std::env::var("DEFMT_LOG").is_err() {
         cmd.env("DEFMT_LOG", "debug");
     }
@@ -282,52 +297,71 @@ impl Task {
         crate_path.join("target")
     }
 
-    pub fn build(&self, plat: Platform, task_loc: &TaskLoc, size: bool) -> Result<PathBuf> {
+    pub fn build(
+        &self,
+        plat: Platform,
+        task_loc: Option<&TaskLoc>,
+        size: bool,
+        reloc: bool,
+    ) -> Result<PathBuf> {
         crate::print_header(format!("Building {}", self.name));
         let TaskSource::Crate { crate_path } = &self.source;
 
         let target_dir = crate_path.join("target");
         fs::create_dir_all(&target_dir)?;
+        if let Some(task_loc) = task_loc {
+            fs::write(
+                target_dir.join("memory.x"),
+                task_loc
+                    .memory_linker_script(self.stack_space_size)?
+                    .as_bytes(),
+            )?;
+        }
+        let link_name = if size { "link-size.x" } else { "link.x" };
+        fs::write(
+            target_dir.join(link_name),
+            if reloc {
+                plat.task_rlink()
+            } else {
+                plat.task_link()
+            },
+        )?;
+        build_crate(crate_path, None, link_name, reloc)
+    }
+
+    pub fn link(
+        &self,
+        reloc_elf: &Path,
+        dest: &Path,
+        task_loc: &TaskLoc,
+        link_script: &[u8],
+    ) -> Result<()> {
+        let target_dir = self.target_dir();
         fs::write(
             target_dir.join("memory.x"),
             task_loc
                 .memory_linker_script(self.stack_space_size)?
                 .as_bytes(),
         )?;
-        let link_name = if size { "link-size.x" } else { "link.x" };
-        fs::write(target_dir.join(link_name), plat.task_link())?;
-        build_crate(crate_path, None, link_name)
+
+        fs::write(target_dir.join("link.x"), link_script)?;
+        let status = Command::new("arm-none-eabi-ld")
+            .current_dir(target_dir)
+            .arg(reloc_elf)
+            .arg("-o")
+            .arg(dest)
+            .arg("-Tlink.x")
+            .arg("--gc-sections")
+            .arg("-z")
+            .arg("common-page-size=0x20")
+            .arg("-z")
+            .arg("max-page-size=0x20")
+            .status()?;
+        if !status.success() {
+            return Err(anyhow!("link failed"));
+        }
+        Ok(())
     }
-
-    // pub fn link(
-    //     &self,
-    //     reloc_elf: &Path,
-    //     dest: &Path,
-    //     task_loc: &TaskLoc,
-    //     link_script: &[u8],
-    // ) -> Result<()> {
-    //     let target_dir = self.target_dir();
-    //     println!("{:?}", task_loc);
-
-    //     fs::write(target_dir.join("link.x"), link_script)?;
-    //     let status = Command::new("riscv64-unknown-elf-ld")
-    //         .current_dir(target_dir)
-    //         .arg(reloc_elf)
-    //         .arg("-o")
-    //         .arg(dest)
-    //         .arg("-Tlink.x")
-    //         .arg("--gc-sections")
-    //         .arg("-z")
-    //         .arg("common-page-size=0x20")
-    //         .arg("-z")
-    //         .arg("max-page-size=0x20")
-    //         .arg("--verbose")
-    //         .status()?;
-    //     if !status.success() {
-    //         return Err(anyhow!("link failed"));
-    //     }
-    //     Ok(())
-    // }
 }
 
 pub(crate) fn get_elf_size(
