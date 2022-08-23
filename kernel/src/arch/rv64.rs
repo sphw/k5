@@ -37,7 +37,7 @@ pub(crate) fn start_root_task(_task: &Task, tcb: &Tcb) -> ! {
     };
 }
 
-pub(crate) fn init_tcb_stack(task: &Task, tcb: &mut Tcb) {
+pub(crate) fn init_tcb_stack(_task: &Task, tcb: &mut Tcb) {
     tcb.saved_state.sp = tcb.stack_pointer as u64;
     tcb.saved_state.pc = tcb.entrypoint as u64;
 }
@@ -61,9 +61,9 @@ pub(crate) unsafe fn kernel() -> *mut Kernel {
 
 pub fn log(bytes: &[u8]) {
     extern "Rust" {
-        fn board_log(bytes: &[u8]);
+        fn _log_impl(bytes: &[u8]);
     }
-    unsafe { board_log(bytes) };
+    unsafe { _log_impl(bytes) };
 }
 
 #[derive(Default)]
@@ -166,7 +166,6 @@ unsafe fn trap_handler(index: SyscallIndex) {
         Trap::Interrupt(Interrupt::MachineExternal) => {}
         Trap::Exception(Exception::UserEnvCall) => {
             let tcb = get_current_tcb();
-            let args = unsafe { tcb.saved_state.syscall_args() };
             tcb.saved_state.pc += 4;
             super::syscall_inner(index);
         }
@@ -179,11 +178,10 @@ pub(crate) fn switch_thread(kernel: &mut Kernel, tcb_ref: ThreadRef) {
     let current_tcb = unsafe { get_current_tcb() };
     let tcb = kernel.scheduler.get_tcb_mut(tcb_ref).unwrap();
     tcb.saved_state.mpc = current_tcb.saved_state.mpc;
-    let task = tcb.task;
     // Safety: The TCB comes from the kernel which is stored statically so this is safe
     unsafe { set_current_tcb(tcb) }
-    let task = kernel.task(task).unwrap();
-    //apply_region_table(&task.region_table);
+    // let task = kernel.task(task).unwrap();
+    // apply_region_table(&task.region_table);
 }
 
 #[no_mangle]

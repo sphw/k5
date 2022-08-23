@@ -29,7 +29,6 @@ use abi::{
 use core::fmt::Write;
 use core::mem;
 use core::{
-    arch::asm,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
 };

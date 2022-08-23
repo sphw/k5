@@ -34,7 +34,7 @@ struct Uart(d1_pac::UART0);
 static mut PRINTER: Option<Uart> = None;
 
 #[no_mangle]
-fn board_log(bytes: &[u8]) {
+fn _log_impl(bytes: &[u8]) {
     let printer = unsafe { PRINTER.as_mut().unwrap() };
     for byte in bytes {
         printer.0.thr().write(|w| unsafe { w.thr().bits(*byte) });
@@ -203,7 +203,7 @@ fn oom(_: core::alloc::Layout) -> ! {
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     let string = alloc::format!("{:?}", info);
-    board_log(string.as_bytes());
+    //board_log(string.as_bytes());
     loop {}
 }
 

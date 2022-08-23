@@ -10,6 +10,7 @@ use mem::MaybeUninit;
 use abi::{SyscallArgs, SyscallIndex, SyscallReturn, SyscallReturnType, ThreadRef};
 use rtt_target::{rtt_init, UpChannel};
 
+use super::syscall_inner;
 use crate::syscalls::CallReturn;
 use crate::KernelError;
 use crate::{
@@ -192,7 +193,7 @@ pub struct SavedThreadState {
 }
 
 impl SavedThreadState {
-    fn syscall_args(&self) -> &SyscallArgs {
+    pub(crate) fn syscall_args(&self) -> &SyscallArgs {
         // Safety: repr(c) guarentees the order of fields, we are taking the first
         // 6 fields as SyscallArgs
         unsafe { mem::transmute(self) }
@@ -312,12 +313,12 @@ fn systick_inner() {
 }
 
 #[inline]
-pub(crate) unsafe fn get_current_tcb() -> &mut Tcb {
-    let tcb = &*CURRENT_TCB.load(Ordering::SeqCst);
+pub(crate) unsafe fn get_current_tcb() -> &'static mut Tcb {
+    &mut *CURRENT_TCB.load(Ordering::SeqCst)
 }
 
 #[inline]
-fn switch_thread(kernel: &Kernel, tcb_ref: ThreadRef) {
+pub(crate) fn switch_thread(kernel: &Kernel, tcb_ref: ThreadRef) {
     let tcb = kernel.scheduler.get_tcb(tcb_ref).unwrap();
     let task = kernel.task(tcb.task).unwrap();
     apply_region_table(&task.region_table);
