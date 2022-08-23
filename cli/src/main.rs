@@ -6,6 +6,7 @@ use std::{
 use clap::Parser;
 use color_eyre::Result;
 use colored::Colorize;
+use logs::LogSource;
 mod build;
 mod elf;
 mod flash;
@@ -30,14 +31,16 @@ fn main() -> color_eyre::Result<()> {
         Args::Logs { path } => {
             let mut config = parse_config(&path)?;
             let target = config.build(&path)?;
-            let session = flash::flash(&config)?;
+            let mut session = flash::flash(&config)?;
             let kernel_path = target.join("kernel.elf");
-            match session {
-                flash::Session::Xfel(_xfel) => todo!(),
-                flash::Session::Probe(mut session) => {
-                    logs::print_logs(&config, kernel_path, &mut session)?;
+            let log_source = match &mut session {
+                flash::Session::Xfel(xfel) => {
+                    xfel.reset()?;
+                    LogSource::Serial
                 }
-            }
+                flash::Session::Probe(session) => LogSource::Rtt(session),
+            };
+            logs::print_logs(&config, kernel_path, log_source)?;
         }
     }
     Ok(())

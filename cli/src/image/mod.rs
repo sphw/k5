@@ -72,17 +72,33 @@ impl ImageBuilder for SRecImageBuilder {
     }
 
     fn task(&mut self, task: &Task) -> Result<()> {
-        let reloc = task.build(self.platform)?;
-        let elf = &task.target_dir().join("size.elf");
-        task.link(
-            &reloc,
-            elf,
-            &TaskLoc {
-                regions: self.regions.clone(),
-            },
-            self.platform.task_link(),
-        )?;
-        let sizes = get_elf_size(elf, &self.regions, task.stack_space_size)?;
+        let reloc = if self.platform.relocate() {
+            Some(task.build(self.platform, None, false, true)?)
+        } else {
+            None
+        };
+        let size_elf = if let Some(reloc) = &reloc {
+            let output_elf = task.target_dir().join("size.elf");
+            task.link(
+                &reloc,
+                &output_elf,
+                &TaskLoc {
+                    regions: self.regions.clone(),
+                },
+                self.platform.task_link(),
+            )?;
+            output_elf
+        } else {
+            task.build(
+                self.platform,
+                Some(&TaskLoc {
+                    regions: self.regions.clone(),
+                }),
+                true,
+                false,
+            )?
+        };
+        let sizes = get_elf_size(&size_elf, &self.regions, task.stack_space_size)?;
         let regions: HashMap<_, _> = sizes
             .clone()
             .into_iter()
@@ -101,15 +117,30 @@ impl ImageBuilder for SRecImageBuilder {
             loc.address += align_up(size.len(), 32);
         }
         println!("{:?}", self.current_locs);
-        let elf = task.target_dir().join("final.elf");
-        task.link(
-            &reloc,
-            &elf,
-            &TaskLoc {
-                regions: regions.clone(),
-            },
-            self.platform.task_link(),
-        )?;
+        let elf = if let Some(reloc) = &reloc {
+            let output_elf = task.target_dir().join("final.elf");
+            task.link(
+                &reloc,
+                &output_elf,
+                &TaskLoc {
+                    regions: regions.clone(),
+                },
+                self.platform.task_link(),
+            )?;
+            output_elf
+        } else {
+            fs::remove_file(&size_elf)?;
+            let elf = task.build(
+                self.platform,
+                Some(&TaskLoc {
+                    regions: regions.clone(),
+                }),
+                false,
+                false,
+            )?;
+            std::fs::copy(&elf, task.target_dir().join("final.elf"))?;
+            elf
+        };
 
         let entrypoint = self.output.write(&elf)?;
         let stack_region = regions

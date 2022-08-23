@@ -5,6 +5,8 @@
 
 mod timer;
 
+extern crate alloc;
+
 use core::{
     alloc::{GlobalAlloc, Layout},
     arch::asm,
@@ -30,32 +32,13 @@ use crate::timer::{Timer, TimerMode, TimerPrescaler, TimerSource, Timers};
 
 struct Uart(d1_pac::UART0);
 static mut PRINTER: Option<Uart> = None;
-impl core::fmt::Write for Uart {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        for byte in s.as_bytes() {
-            self.0.thr().write(|w| unsafe { w.thr().bits(*byte) });
-            while self.0.usr.read().tfnf().bit_is_clear() {}
-        }
-        Ok(())
-    }
-}
-pub fn _print(args: core::fmt::Arguments) {
-    use core::fmt::Write;
-    unsafe {
-        PRINTER.as_mut().unwrap().write_fmt(args).ok();
-    }
-}
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => {
-        $crate::_print(core::format_args!($($arg)*));
-    }
-}
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => {
-        $crate::_print(core::format_args!($($arg)*));
-        $crate::print!("\r\n");
+
+#[no_mangle]
+fn _log_impl(bytes: &[u8]) {
+    let printer = unsafe { PRINTER.as_mut().unwrap() };
+    for byte in bytes {
+        printer.0.thr().write(|w| unsafe { w.thr().bits(*byte) });
+        while printer.0.usr.read().tfnf().bit_is_clear() {}
     }
 }
 
@@ -102,7 +85,6 @@ fn main() -> ! {
         crate::ALLOCATOR.init(unsafe { HEAP })
     }
     init_pmp();
-    println!("kernel init");
 
     // // Set up timers
     // let Timers {
@@ -138,8 +120,6 @@ fn main() -> ! {
     // plic.prio[76].write(|w| w.priority().p1());
     // plic.mie[2].write(|w| unsafe { w.bits((1 << 11) | (1 << 12)) });
 
-    println!("return from ecall");
-
     // // Blink LED
     // loop {
     //     // Start both counters for 3M ticks: that's 1s for timer 0
@@ -156,24 +136,23 @@ fn main() -> ! {
     // }
     let mut kernel = kernel::KernelBuilder::new(task_table::TASKS);
     let _idle = kernel.idle_thread(task_table::IDLE);
-    kernel.start()
-}
 
-#[no_mangle]
-unsafe fn print_trap_handler(trap_frame: *const riscv_rt::TrapFrame) {
-    println!("trap_handler: {:?}", &*trap_frame);
-    let cause = riscv::register::mcause::read();
-    match cause.cause() {
-        Trap::Interrupt(Interrupt::MachineExternal) => {}
-        Trap::Exception(Exception::MachineEnvCall) => {
-            println!("ecall");
-            let mepc = riscv::register::mepc::read() + 4;
-            riscv::register::mepc::write(mepc);
-        }
-        other => {
-            println!("other mcause: {:?}", other);
-        }
-    }
+    let foo_thread = kernel.thread(
+        task_table::FOO
+            .priority(7)
+            .budget(5)
+            .cooldown(usize::MAX)
+            .listen(*b"0123456789abcdef"),
+    );
+    let bar_thread = kernel.thread(
+        task_table::BAR
+            .priority(7)
+            .budget(100)
+            .cooldown(50)
+            .connect(*b"0123456789abcdef"),
+    );
+    kernel.endpoint(bar_thread, foo_thread, 0);
+    kernel.start()
 }
 
 pub struct RISCVHeap {
@@ -223,7 +202,8 @@ fn oom(_: core::alloc::Layout) -> ! {
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    println!("{:?}", info);
+    let string = alloc::format!("{:?}", info);
+    //board_log(string.as_bytes());
     loop {}
 }
 
@@ -239,7 +219,7 @@ fn init_pmp() {
     pmpaddr0::write(0x40000000usize >> 2 | (0xf00000 - 1));
     pmpaddr1::write(0x40f00000usize >> 2 | (0xf00000 - 1));
     // pmpaddr1::write(0x40200000usize >> 2);
-    // pmpaddr2::write(0x80000000usize >> 2);
-    // pmpaddr3::write(0x80200000usize >> 2);
+    pmpaddr2::write(0x80000000usize >> 2);
+    pmpaddr3::write(0x80200000usize >> 2);
     // pmpaddr4::write(0xffffffffusize >> 2);
 }

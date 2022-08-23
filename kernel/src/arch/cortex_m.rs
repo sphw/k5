@@ -10,6 +10,7 @@ use mem::MaybeUninit;
 use abi::{SyscallArgs, SyscallIndex, SyscallReturn, SyscallReturnType, ThreadRef};
 use rtt_target::{rtt_init, UpChannel};
 
+use super::syscall_inner;
 use crate::syscalls::CallReturn;
 use crate::KernelError;
 use crate::{
@@ -40,11 +41,11 @@ pub(crate) fn init_kernel<'k, 't>(tasks: &'t [TaskDesc]) -> &'k mut Kernel {
 }
 
 #[inline]
-unsafe fn kernel() -> *mut Kernel {
+pub(crate) unsafe fn kernel() -> *mut Kernel {
     KERNEL.as_mut_ptr()
 }
 
-unsafe fn set_current_tcb(task: &Tcb) {
+pub(crate) unsafe fn set_current_tcb(task: &Tcb) {
     CURRENT_TCB.store(task as *const Tcb as *mut Tcb, Ordering::SeqCst);
 }
 
@@ -192,7 +193,7 @@ pub struct SavedThreadState {
 }
 
 impl SavedThreadState {
-    fn syscall_args(&self) -> &SyscallArgs {
+    pub(crate) fn syscall_args(&self) -> &SyscallArgs {
         // Safety: repr(c) guarentees the order of fields, we are taking the first
         // 6 fields as SyscallArgs
         unsafe { mem::transmute(self) }
@@ -311,50 +312,13 @@ fn systick_inner() {
     }
 }
 
-fn syscall_inner(index: SyscallIndex) {
-    // Safety: We are safe to access global state due to our interrupt model
-    let args = unsafe {
-        let tcb = &*CURRENT_TCB.load(Ordering::SeqCst);
-        tcb.saved_state.syscall_args()
-    };
-    // Safety: We are safe to access global state due to our interrupt model
-    let kernel = unsafe { &mut *kernel() };
-    let ret = match kernel.syscall(index, args) {
-        Ok(ret) => ret,
-        Err(KernelError::ABI(err)) => CallReturn::Return {
-            ret: SyscallReturn::new()
-                .with(SyscallReturn::SYSCALL_TYPE, SyscallReturnType::Error)
-                .with(SyscallReturn::SYSCALL_LEN, u8::from(err) as u64),
-        },
-        err => {
-            let _ = err.unwrap();
-            return;
-        }
-    };
-    match ret {
-        CallReturn::Replace { next_thread } => switch_thread(kernel, next_thread),
-        CallReturn::Switch { next_thread, ret } => {
-            // Safety: `Switch` guarentees that the current TCB has been left in place
-            // and not killed or deleted. Meaning that `CURRENT_TCB` contains a
-            // valid pointer. Also since the kernel is single threaded, we
-            // are guareneteed to be able to safely access `CURRENT_TCB`
-            let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
-            tcb.saved_state.set_syscall_return(ret);
-            switch_thread(kernel, next_thread)
-        }
-        CallReturn::Return { ret } => {
-            // Safety: `Switch` guarentees that the current TCB has been left in place
-            // and not killed or deleted. Meaning that `CURRENT_TCB` contains a
-            // valid pointer. Also since the kernel is single threaded, we
-            // are guareneteed to be able to safely access `CURRENT_TCB`
-            let tcb = unsafe { &mut *CURRENT_TCB.load(Ordering::SeqCst) };
-            tcb.saved_state.set_syscall_return(ret);
-        }
-    }
+#[inline]
+pub(crate) unsafe fn get_current_tcb() -> &'static mut Tcb {
+    &mut *CURRENT_TCB.load(Ordering::SeqCst)
 }
 
 #[inline]
-fn switch_thread(kernel: &Kernel, tcb_ref: ThreadRef) {
+pub(crate) fn switch_thread(kernel: &Kernel, tcb_ref: ThreadRef) {
     let tcb = kernel.scheduler.get_tcb(tcb_ref).unwrap();
     let task = kernel.task(tcb.task).unwrap();
     apply_region_table(&task.region_table);

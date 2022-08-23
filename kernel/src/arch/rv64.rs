@@ -1,3 +1,4 @@
+use abi::{SyscallArgs, SyscallIndex, ThreadRef};
 use core::arch::asm;
 use core::mem::{self, MaybeUninit};
 use core::ptr;
@@ -24,9 +25,9 @@ pub(crate) fn start_root_task(_task: &Task, tcb: &Tcb) -> ! {
     unsafe {
         asm!(
             "
-            csrw mscratch, a0
+            csrrw a0, mscratch, a0
             sd sp,  32*8(a0)
-            csrw mscratch, a0
+            csrrw a0, mscratch, a0
             ld sp, ({sp})
             mret
             ",
@@ -37,31 +38,36 @@ pub(crate) fn start_root_task(_task: &Task, tcb: &Tcb) -> ! {
 }
 
 pub(crate) fn init_tcb_stack(_task: &Task, tcb: &mut Tcb) {
-    tcb.saved_state = SavedThreadState::default();
-    //let stack_addr = tcb.stack_pointer - mem::size_of::<ExceptionFrame>();
+    tcb.saved_state.sp = tcb.stack_pointer as u64;
+    tcb.saved_state.pc = tcb.entrypoint as u64;
 }
 
 pub(crate) fn init_kernel<'k, 't>(tasks: &'t [crate::TaskDesc]) -> &'k mut crate::Kernel {
+    log(b"LOG_START");
     unsafe {
         if KERNEL_INIT.load(Ordering::SeqCst) {
             panic!("kernel already inited");
         }
-        init_log();
         let kern = KERNEL.write(Kernel::from_tasks(tasks).unwrap());
         KERNEL_INIT.store(true, Ordering::SeqCst);
         kern
     }
 }
 
-fn init_log() {}
-
 #[inline]
-unsafe fn kernel() -> *mut Kernel {
+pub(crate) unsafe fn kernel() -> *mut Kernel {
     KERNEL.as_mut_ptr()
 }
 
-pub fn log(_bytes: &[u8]) {}
+pub fn log(bytes: &[u8]) {
+    extern "Rust" {
+        fn _log_impl(bytes: &[u8]);
+    }
+    unsafe { _log_impl(bytes) };
+}
+
 #[derive(Default)]
+#[repr(C)]
 pub struct SavedThreadState {
     ra: u64,
     sp: u64,
@@ -100,7 +106,21 @@ pub struct SavedThreadState {
 }
 
 impl SavedThreadState {
-    pub fn set_syscall_return(&mut self, _ret: abi::SyscallReturn) {}
+    pub(super) fn syscall_args(&self) -> &SyscallArgs {
+        // Safety: repr(c) guarentees the order of fields, we are taking the first
+        // 6 fields as SyscallArgs
+        unsafe { mem::transmute(&self.a2) }
+    }
+
+    pub fn syscall_args_mut(&mut self) -> &mut SyscallArgs {
+        // Safety: repr(c) guarentees the order of fields, we are taking the first
+        // 6 fields as SyscallArgs
+        unsafe { mem::transmute(&mut self.a2) }
+    }
+
+    pub fn set_syscall_return(&mut self, ret: abi::SyscallReturn) {
+        self.a0 = ret.into();
+    }
 }
 
 pub(crate) fn translate_task_ptr<'a, T: ptr::Pointee + ?Sized>(
@@ -132,26 +152,36 @@ fn validate_addr(addr: usize, len: usize, regions: &[Region]) -> bool {
 
 pub(crate) fn clear_mem(_task: &Task) {}
 
-unsafe fn set_current_tcb(task: &Tcb) {
+pub(crate) unsafe fn set_current_tcb(task: &Tcb) {
     riscv::register::mscratch::write((task as *const Tcb).addr())
 }
 
-unsafe fn get_current_tcb() -> &'static mut Tcb {
+pub(super) unsafe fn get_current_tcb() -> &'static mut Tcb {
     &mut *(riscv::register::mscratch::read() as *mut Tcb)
 }
 
-unsafe fn trap_handler() {
+unsafe fn trap_handler(index: SyscallIndex) {
     let cause = riscv::register::mcause::read();
     match cause.cause() {
         Trap::Interrupt(Interrupt::MachineExternal) => {}
         Trap::Exception(Exception::UserEnvCall) => {
-            // let mepc = riscv::register::mepc::read() + 4;
-            // riscv::register::mepc::write(mepc);
             let tcb = get_current_tcb();
             tcb.saved_state.pc += 4;
+            super::syscall_inner(index);
         }
         _ => {}
     }
+}
+
+#[inline]
+pub(crate) fn switch_thread(kernel: &mut Kernel, tcb_ref: ThreadRef) {
+    let current_tcb = unsafe { get_current_tcb() };
+    let tcb = kernel.scheduler.get_tcb_mut(tcb_ref).unwrap();
+    tcb.saved_state.mpc = current_tcb.saved_state.mpc;
+    // Safety: The TCB comes from the kernel which is stored statically so this is safe
+    unsafe { set_current_tcb(tcb) }
+    // let task = kernel.task(task).unwrap();
+    // apply_region_table(&task.region_table);
 }
 
 #[no_mangle]
@@ -160,6 +190,7 @@ unsafe fn trap_handler() {
 unsafe extern "C" fn _start_trap() -> ! {
     asm!(
         "
+         .align 4
          # we store the current task pointer in mscratch
          # so we swap it into a0, and then save all the pointers to saved state
          csrrw a0, mscratch, a0
@@ -201,7 +232,7 @@ unsafe extern "C" fn _start_trap() -> ! {
          csrr a1, mscratch
          sd a1, 9*8(a0) # store a0 now that
 
-         lw sp, 32*8(a0) # load old machine stack pointer
+         ld sp, 32*8(a0) # load old machine stack pointer
          # TODO(sphw): swap back mscratch
          csrrw a0, mscratch, a0
 
@@ -214,7 +245,6 @@ unsafe extern "C" fn _start_trap() -> ! {
 
          ld t5,  31*8(t6)
          ld ra,   0*8(t6)
-         ld sp,   1*8(t6)
          ld gp,   2*8(t6)
          ld tp,   3*8(t6)
          ld t0,   4*8(t6)
@@ -244,6 +274,7 @@ unsafe extern "C" fn _start_trap() -> ! {
          ld t4,  28*8(t6)
          ld t5,  29*8(t6)
          sd sp,  32*8(t6)
+         ld sp,   1*8(t6)
 
          csrrw t6, mscratch, t6 #
          csrrw t5, mscratch, t5
@@ -257,5 +288,3 @@ unsafe extern "C" fn _start_trap() -> ! {
      options(noreturn)
     )
 }
-
-unsafe fn jump_root_task() {}

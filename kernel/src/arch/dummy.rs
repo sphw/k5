@@ -61,3 +61,7 @@ pub(crate) fn translate_mut_task_ptr<'a, T: std::ptr::Pointee + ?Sized>(
 }
 
 pub(crate) fn clear_mem(_task: &Task) {}
+
+unsafe fn get_current_tcb() -> &mut Tcb {
+    todo!()
+}

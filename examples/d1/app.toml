@@ -6,17 +6,31 @@ flash = "SpiNor"
 base_addr = 0x30000
 
 [regions]
-flash = { address = 0x40020000, size = 0x90000 }
-ram = { address = 0x400f0000, size = 0x80000, role = "stack" }
+flash = { address = 0x40020000, size = 0xf0000 }
+ram = { address = 0x40110000, size = 0x80000, role = "stack" }
 
 [kernel]
 crate_path = "./"
 linker_script = "./link.x"
 stack_size = 0x00000
-sizes.flash = 0x20000
+sizes.flash = 0x60000
+sizes.ram = 0x40000
 
 [[tasks]]
 name = "idle"
+crate_path = "../rv-idle"
+secure = false
+root = false
+
+[[tasks]]
+name = "foo"
 crate_path = "../rv-foo"
+secure = false
+root = false
+
+
+[[tasks]]
+name = "bar"
+crate_path = "../rv-bar"
 secure = false
 root = false
